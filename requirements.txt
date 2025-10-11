@@ -11,3 +11,5 @@ streamlit
 flask
 python-dotenv
 pytest
+kagglehub
+ipykernel
