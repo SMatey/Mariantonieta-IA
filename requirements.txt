@@ -11,3 +11,8 @@ streamlit
 flask
 python-dotenv
 pytest
+google-cloud-speech
+google-cloud-core
+grpcio
+python-multipart
+sounddevice
