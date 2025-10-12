@@ -13,3 +13,8 @@ python-dotenv
 pytest
 google-cloud-vision
 azure-storage-blob
+google-cloud-speech
+google-cloud-core
+grpcio
+python-multipart
+sounddevice
