@@ -2,4 +2,5 @@ venv/
 .env
 secrets/
 *.json
-
+__pycache__/
+*.pyc
