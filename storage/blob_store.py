@@ -1,3 +1,4 @@
+# storage/blob_store.py
 from __future__ import annotations
 import os, uuid
 from azure.storage.blob import BlobServiceClient

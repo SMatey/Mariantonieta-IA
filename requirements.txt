@@ -18,5 +18,7 @@ google-cloud-core
 grpcio
 python-multipart
 sounddevice
-google-cloud-vision
-azure-storage-blob
+httpx
+azure-cosmos
+opencv-contrib-python-headless
+
