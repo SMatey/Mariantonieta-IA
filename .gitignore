@@ -4,3 +4,15 @@ secrets/
 *.json
 __pycache__/
 *.pyc
+.venv/
+.venv311/
+**/.venv*/
+
+
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+.vscode/
+.DS_Store
+Thumbs.db
