@@ -18,3 +18,5 @@ google-cloud-core
 grpcio
 python-multipart
 sounddevice
+httpx
+opencv-contrib-python-headless
