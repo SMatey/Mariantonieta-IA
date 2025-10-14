@@ -1,41 +1,35 @@
-// src/App.tsx
-import React from "react";
-import { Outlet } from "react-router-dom";
+import { useState } from 'react'
+import reactLogo from './assets/react.svg'
+import viteLogo from '/vite.svg'
+import './App.css'
 
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
-
-export default function App() {
-  const [status, setStatus] = React.useState<"ok" | "down" | "checking">("checking");
-
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`${API_URL}/health`);
-        if (!cancelled) setStatus(res.ok ? "ok" : "down");
-      } catch {
-        if (!cancelled) setStatus("down");
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+function App() {
+  const [count, setCount] = useState(0)
 
   return (
-    <div style={{ minHeight: "100vh", display: "grid", gridTemplateRows: "auto 1fr auto" }}>
-      <header style={{ padding: "12px 16px", borderBottom: "1px solid #eee", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1 style={{ fontSize: 18, margin: 0 }}>Detector de Emoción</h1>
-        <div style={{ fontSize: 12, color: status === "ok" ? "green" : "#b00" }}>
-          {status === "checking" ? "checando API…" : status === "ok" ? "API OK" : "API caída"}
-        </div>
-      </header>
-
-      <main style={{ padding: 16, maxWidth: 960, width: "100%", margin: "0 auto" }}>
-        <Outlet />
-      </main>
-
-      <footer style={{ padding: 12, textAlign: "center", color: "#666", borderTop: "1px solid #eee" }}>
-        Backend: <code>{API_URL}</code>
-      </footer>
-    </div>
-  );
+    <>
+      <div>
+        <a href="https://vite.dev" target="_blank">
+          <img src={viteLogo} className="logo" alt="Vite logo" />
+        </a>
+        <a href="https://react.dev" target="_blank">
+          <img src={reactLogo} className="logo react" alt="React logo" />
+        </a>
+      </div>
+      <h1>Vite + React</h1>
+      <div className="card">
+        <button onClick={() => setCount((count) => count + 1)}>
+          count is {count}
+        </button>
+        <p>
+          Edit <code>src/App.tsx</code> and save to test HMR
+        </p>
+      </div>
+      <p className="read-the-docs">
+        Click on the Vite and React logos to learn more
+      </p>
+    </>
+  )
 }
+
+export default App
