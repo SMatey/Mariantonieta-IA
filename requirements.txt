@@ -13,3 +13,4 @@ python-dotenv
 pytest
 kagglehub
 ipykernel
+langchain_community
