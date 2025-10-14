@@ -11,6 +11,9 @@ streamlit
 flask
 python-dotenv
 pytest
+kagglehub
+ipykernel
+langchain_community
 google-cloud-vision
 azure-storage-blob
 google-cloud-speech

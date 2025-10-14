@@ -1,5 +1,7 @@
 venv/
 .env
+data/
+__pycache__/
 secrets/
 *.json
 __pycache__/
@@ -16,3 +18,5 @@ frontend/.vite/
 .vscode/
 .DS_Store
 Thumbs.db
+
+
