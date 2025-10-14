@@ -11,7 +11,7 @@ Destacado
 
 | Archivo                  | Tipo          | Propósito                                         |
 |-------------------------:|:-------------:|:--------------------------------------------------|
-| `bitcoin_model.pkl`      | Regresión     | Predicción del precio del Bitcoin                  |
+| `bitcoin_model.pkl`      | Bosque Aleatorio     | Predicción del precio del Bitcoin                  |
 | `movies_model.pkl`       | Recomendación | Sugerencia de películas según preferencias         |
 | `house_model.pkl`        | Regresión     | Predicción del precio de viviendas                 |
 | `stroke_model.pkl`       | Clasificación | Detección de riesgo de accidente cerebrovascular   |

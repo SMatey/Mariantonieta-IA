@@ -1,10 +1,11 @@
 venv/
 .env
+data/
+__pycache__/
 secrets/
 *.json
 __pycache__/
 *.pyc
-
 .venv/
 .venv311/
 **/.venv*/
