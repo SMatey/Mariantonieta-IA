@@ -189,8 +189,8 @@ export default function MariantoniettaAssistant() {
     }, 1000)
   }
 
-  // Handle sending message
-  const handleSend = () => {
+  // Handle sending message to LLM API
+  const handleSend = async () => {
     if (!input.trim()) return
 
     const userMessage: Message = {
@@ -201,21 +201,53 @@ export default function MariantoniettaAssistant() {
     }
 
     setMessages((prev) => [...prev, userMessage])
-    setInput("")
+    setInput("") // Clear input field
 
-    // Simulate assistant response
-    const responses = [
-      "I'm here to help! What would you like to know?",
-      "That's an interesting question. Let me think about that...",
-      "I understand. Here's what I can tell you about that.",
-      "Great question! I'd be happy to assist you with that.",
-      "I'm processing your request. One moment please.",
-    ]
-    const randomResponse = responses[Math.floor(Math.random() * responses.length)]
-    simulateAssistantResponse(randomResponse)
+    // Simulate assistant thinking (optional animation or delay)
+    setAssistantState("thinking")
+    setCurrentResponse("")
+
+    try {
+      // Send request to /ask to get the assistant's response
+      const response = await fetch("http://localhost:8000/ask", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          query: input,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Error en la comunicación con el backend")
+      }
+
+      const data = await response.json()
+
+      // Get response from LLM and simulate assistant speaking
+      setAssistantState("speaking")
+      setCurrentResponse(data.respuesta)
+
+      // After response is received, add assistant message to chat
+      const assistantMessage: Message = {
+        id: Date.now().toString(),
+        role: "assistant",
+        content: data.respuesta,
+        timestamp: new Date(),
+      }
+
+      // Add assistant message to messages array
+      setMessages((prev) => [...prev, assistantMessage])
+      setCurrentResponse("") // Clear current response
+      setAssistantState("idle") // Set state to idle after processing
+    } catch (error) {
+      console.error("Error:", error)
+      setAssistantState("idle")
+    }
   }
 
-  // Handle Enter key
+  // Handle Enter key press for sending message
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
