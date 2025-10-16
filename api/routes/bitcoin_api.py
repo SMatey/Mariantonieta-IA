@@ -16,7 +16,7 @@ import requests
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from notebooks import constants as const
 
-app = FastAPI(title="Bitcoin Real Data Prediction API", version="3.0.0")
+app = FastAPI(title="Bitcoin Real Data Prediction API", version="1.0.0")
 
 class PredictionRequest(BaseModel):
     query: str

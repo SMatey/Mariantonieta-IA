@@ -12,27 +12,33 @@ MODELS_CONFIG = {
         "available": True,
         "response_type": "prediction"
     },
-    # TODO: Agregar configuración para otros modelos cuando estén implementados
+    "properties": {
+        "endpoint": "http://localhost:8000/properties/models/properties/predict",
+        "description": "Para predicción de precios de propiedades inmobiliarias, casas, apartamentos",
+        "available": True,
+        "response_type": "prediction"
+    },
+    "movies": {
+        "endpoint": "http://localhost:8000/movies/models/movies/recommend",
+        "description": "Para recomendaciones de películas personalizadas basadas en preferencias",
+        "available": True,
+        "response_type": "recommendation"
+    },
+    # Modelos en desarrollo
     "wine": {
-        "endpoint": "http://localhost:8000/wine/classify",  # TODO: Implementar endpoint
+        "endpoint": "http://localhost:8000/wine/classify",
         "description": "Para clasificación de vinos basada en características químicas",
         "available": False,
         "response_type": "classification"
     },
     "churn": {
-        "endpoint": "http://localhost:8000/churn/predict",  # TODO: Implementar endpoint
+        "endpoint": "http://localhost:8000/churn/predict",
         "description": "Para predicción de abandono de clientes",
         "available": False,
         "response_type": "prediction"
     },
-    "movies": {
-        "endpoint": "http://localhost:8000/movies/recommend",  # TODO: Implementar endpoint
-        "description": "Para recomendaciones de películas personalizadas",
-        "available": False,
-        "response_type": "recommendation"
-    },
     "emotions": {
-        "endpoint": "http://localhost:8000/emotions/analyze",  # TODO: Implementar endpoint
+        "endpoint": "http://localhost:8000/emotions/analyze",
         "description": "Para análisis de emociones en texto",
         "available": False,
         "response_type": "classification"
@@ -89,6 +95,101 @@ def extract_bitcoin_parameters(query: str):
         print(f"Error extrayendo parámetros: {e}")
         return {}
 
+def extract_properties_parameters(query: str):
+    """
+    Extrae parámetros para predicción de precios de propiedades
+    """
+    extraction_prompt = f"""
+    Extrae características de propiedades del siguiente texto:
+    
+    "{query}"
+    
+    Busca y extrae SOLO los valores mencionados explícitamente:
+    - Baños (ej: "3 baños", "2.5 bathrooms", "4 bath")
+    - Habitaciones (ej: "4 habitaciones", "3 bedrooms", "5 bed")
+    - Pies cuadrados (ej: "2500 sq ft", "1800 pies cuadrados", "3000 square feet")
+    - Año construcción (ej: "construida en 1990", "built in 2005", "año 2010")
+    - Tamaño del lote (ej: "7000 sq ft lot", "0.5 acres", "5000 pies cuadrados de terreno")
+    - Coordenadas (ej: "latitud 34.05", "longitude -118.25")
+    - Impuestos (ej: "taxes $5000", "impuestos 4500 anuales")
+    
+    Responde SOLO en formato JSON válido:
+    {{
+        "bathroomcnt": 3.0,
+        "bedroomcnt": 4.0,
+        "finishedsquarefeet": 2500.0,
+        "yearbuilt": 1990.0,
+        "lotsizesquarefeet": 7000.0,
+        "latitude": null,
+        "longitude": null,
+        "taxamount": 5000.0
+    }}
+    
+    Si NO encuentras un valor específico, usa null.
+    """
+    
+    try:
+        extraction_result = llm.invoke(extraction_prompt)
+        import json
+        import re
+        
+        json_match = re.search(r'\{.*\}', extraction_result, re.DOTALL)
+        if json_match:
+            json_str = json_match.group()
+            extracted_params = json.loads(json_str)
+            filtered_params = {k: v for k, v in extracted_params.items() if v is not None}
+            return filtered_params
+        else:
+            return {}
+    except Exception as e:
+        print(f"Error extrayendo parámetros de propiedades: {e}")
+        return {}
+
+def extract_movies_parameters(query: str):
+    """
+    Extrae parámetros para recomendaciones de películas
+    """
+    extraction_prompt = f"""
+    Extrae información para recomendaciones de películas del siguiente texto:
+    
+    "{query}"
+    
+    Busca y extrae SOLO los valores mencionados explícitamente:
+    - ID de película (ej: "película ID 5", "movie 10", "film 25")
+    - ID de usuario (ej: "usuario 15", "user 8", "mi ID es 20")
+    - Título de película (ej: "Toy Story", "Jumanji", "Heat")
+    - Género (ej: "acción", "comedia", "drama", "thriller")
+    - Número de recomendaciones (ej: "5 películas", "recomienda 3", "top 10")
+    
+    Responde SOLO en formato JSON válido:
+    {{
+        "movie_id": 5,
+        "user_id": 15,
+        "movie_title": "Toy Story",
+        "genre": "acción",
+        "num_recommendations": 5
+    }}
+    
+    Si NO encuentras un valor específico, usa null.
+    """
+    
+    try:
+        extraction_result = llm.invoke(extraction_prompt)
+        import json
+        import re
+        
+        json_match = re.search(r'\{.*\}', extraction_result, re.DOTALL)
+        if json_match:
+            json_str = json_match.group()
+            extracted_params = json.loads(json_str)
+            filtered_params = {k: v for k, v in extracted_params.items() if v is not None}
+            return filtered_params
+        else:
+            return {}
+    except Exception as e:
+        print(f"Error extrayendo parámetros de películas: {e}")
+        return {}
+
 def get_available_models():
     """Retorna lista de modelos disponibles"""
     return {name: config for name, config in MODELS_CONFIG.items() if config["available"]}
@@ -143,12 +244,28 @@ def interpretar_y_ejecutar(query: str):
         try:
             data = {"query": query}
             
-            # Si es el modelo Bitcoin, extraer parámetros específicos
+            # Extraer parámetros específicos según el modelo
             if modelo == "bitcoin":
                 bitcoin_params = extract_bitcoin_parameters(query)
                 if bitcoin_params:
                     data.update(bitcoin_params)
                     print(f"🎯 Parámetros extraídos para Bitcoin: {bitcoin_params}")
+            
+            elif modelo == "properties":
+                properties_params = extract_properties_parameters(query)
+                if properties_params:
+                    data.update(properties_params)
+                    print(f"🏠 Parámetros extraídos para Propiedades: {properties_params}")
+            
+            elif modelo == "movies":
+                movies_params = extract_movies_parameters(query)
+                if movies_params:
+                    data.update(movies_params)
+                    print(f"🎬 Parámetros extraídos para Películas: {movies_params}")
+                
+                # Para películas, podríamos necesitar un endpoint diferente si es predicción de rating
+                if "user_id" in data and "movie_id" in data:
+                    model_config["endpoint"] = "http://localhost:8000/movies/models/movies/predict-rating"
             
             response = requests.post(model_config["endpoint"], json=data, timeout=30)
             
@@ -207,6 +324,12 @@ def format_fallback_response(modelo: str, result: dict, response_type: str):
                 prediction = result.get("prediction", 0)
                 confidence = result.get("confidence", 0)
                 return f"💰 Predicción de Bitcoin: ${prediction:,.2f} USD (Confianza: {confidence:.1f}%)"
+            
+            elif modelo == "properties" and "prediction" in result:
+                prediction = result.get("prediction", 0)
+                confidence = result.get("confidence", 0)
+                return f"🏠 Precio estimado de propiedad: ${prediction:,.2f} USD (Confianza: {confidence:.1f}%)"
+            
             # TODO: Agregar formato para otros modelos de predicción (churn, etc.)
             
         elif response_type == "classification":
@@ -217,10 +340,18 @@ def format_fallback_response(modelo: str, result: dict, response_type: str):
                 return f"🎯 Clasificación: {predicted_class} (Probabilidad: {probability:.1f}%)"
                 
         elif response_type == "recommendation":
-            # TODO: Implementar formato para modelos de recomendación (movies)
-            if "recommendations" in result:
-                recs = result.get("recommendations", [])[:3]  # Top 3
-                return f"🎬 Recomendaciones: {', '.join(recs)}"
+            if modelo == "movies":
+                if "recommendations" in result:
+                    recs = result.get("recommendations", [])[:3]  # Top 3
+                    if recs:
+                        movie_titles = [rec.get("title", "Película desconocida") for rec in recs]
+                        return f"🎬 Recomendaciones de películas: {', '.join(movie_titles)}"
+                
+                elif "predicted_rating" in result:
+                    rating = result.get("predicted_rating", 0)
+                    confidence = result.get("confidence", 0)
+                    movie_title = result.get("model_info", {}).get("movie_title", "Película")
+                    return f"🎬 Rating predicho para {movie_title}: {rating:.1f}/5.0 (Confianza: {confidence:.1f}%)"
         
         # Respuesta genérica si no hay formato específico
         return f"Resultado del modelo {modelo}: {json.dumps(result, indent=2)}"
