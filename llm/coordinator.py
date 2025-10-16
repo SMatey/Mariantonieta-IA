@@ -39,6 +39,56 @@ MODELS_CONFIG = {
     }
 }
 
+def extract_bitcoin_parameters(query: str):
+    """
+    Extrae parámetros numéricos del texto para el modelo Bitcoin
+    """
+    extraction_prompt = f"""
+    Extrae valores numéricos específicos para predicción de Bitcoin del siguiente texto:
+    
+    "{query}"
+    
+    Busca y extrae SOLO los valores que se mencionen explícitamente:
+    - Precio actual/open (ej: "precio actual 32500", "bitcoin está en 31000")
+    - Precio máximo/high (ej: "máximo 33000", "high 32800")
+    - Precio mínimo/low (ej: "mínimo 31500", "low 31200")
+    - Volumen (ej: "volumen 2B", "2 billones de volumen", "1.5B USD")
+    - Market cap (ej: "market cap 600B", "capitalización 700 billones")
+    - RSI (ej: "RSI 65", "RSI de 72.5")
+    - Medias móviles (ej: "MA5 31800", "media móvil 20 días 31500")
+    
+    Responde SOLO en formato JSON válido con los valores encontrados:
+    {{
+        "open_price": 32500.0,
+        "high_price": null,
+        "volume": 2000000000.0,
+        "rsi_14": 65.0
+    }}
+    
+    Si NO encuentras un valor específico, usa null.
+    NO inventes valores, SOLO extrae los mencionados explícitamente.
+    """
+    
+    try:
+        extraction_result = llm.invoke(extraction_prompt)
+        # Intentar parsear como JSON
+        import json
+        import re
+        
+        # Limpiar la respuesta para extraer solo el JSON
+        json_match = re.search(r'\{.*\}', extraction_result, re.DOTALL)
+        if json_match:
+            json_str = json_match.group()
+            extracted_params = json.loads(json_str)
+            # Filtrar valores null
+            filtered_params = {k: v for k, v in extracted_params.items() if v is not None}
+            return filtered_params
+        else:
+            return {}
+    except Exception as e:
+        print(f"Error extrayendo parámetros: {e}")
+        return {}
+
 def get_available_models():
     """Retorna lista de modelos disponibles"""
     return {name: config for name, config in MODELS_CONFIG.items() if config["available"]}
@@ -92,6 +142,14 @@ def interpretar_y_ejecutar(query: str):
         # Hacer la consulta al modelo
         try:
             data = {"query": query}
+            
+            # Si es el modelo Bitcoin, extraer parámetros específicos
+            if modelo == "bitcoin":
+                bitcoin_params = extract_bitcoin_parameters(query)
+                if bitcoin_params:
+                    data.update(bitcoin_params)
+                    print(f"🎯 Parámetros extraídos para Bitcoin: {bitcoin_params}")
+            
             response = requests.post(model_config["endpoint"], json=data, timeout=30)
             
             if response.status_code == 200:
