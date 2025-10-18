@@ -47,68 +47,85 @@ _movies_data = None
 _ratings_data = None
 
 def load_movies_model_and_data():
-    """Carga el modelo KNN y los datos de películas"""
+    """Carga el modelo KNN y los datos reales de películas"""
     global _loaded_model_data, _movies_data, _ratings_data
     
     if _loaded_model_data is not None:
         return _loaded_model_data, _movies_data, _ratings_data
     
     try:
-        # Cargar modelo KNN
-        model_path = os.path.join(const.BASE_DIR, 'models', 'knn_movie_recommendation_model.pkl')
-        with open(model_path, 'rb') as f:
-            knn_model = pickle.load(f)
+        # Intentar cargar modelo KNN real
+        try:
+            import pickle
+            model_path = os.path.join(const.BASE_DIR, 'models', 'knn_movie_recommendation_model.pkl')
+            with open(model_path, 'rb') as f:
+                knn_model = pickle.load(f)
+            model_available = True
+            print(f"Modelo KNN cargado desde: {model_path}")
+        except (ImportError, FileNotFoundError) as e:
+            print(f"Modelo KNN no disponible: {e}")
+            knn_model = None
+            model_available = False
         
-        # Cargar datos de películas (simulados para el ejemplo)
-        # En un caso real, cargarías desde archivos CSV
-        _movies_data = pd.DataFrame({
-            'movieId': [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-            'title': [
-                'Toy Story (1995)',
-                'Jumanji (1995)', 
-                'Grumpier Old Men (1995)',
-                'Waiting to Exhale (1995)',
-                'Father of the Bride Part II (1995)',
-                'Heat (1995)',
-                'Sabrina (1995)',
-                'Tom and Huck (1995)',
-                'Sudden Death (1995)',
-                'GoldenEye (1995)'
-            ],
-            'genres': [
-                'Adventure|Animation|Children|Comedy|Fantasy',
-                'Adventure|Children|Fantasy',
-                'Comedy|Romance',
-                'Comedy|Drama|Romance',
-                'Comedy',
-                'Action|Crime|Thriller',
-                'Comedy|Romance',
-                'Adventure|Children',
-                'Action',
-                'Action|Adventure|Thriller'
-            ]
-        })
-        
-        # Datos de ratings simulados
-        _ratings_data = pd.DataFrame({
-            'userId': [1, 1, 1, 2, 2, 3, 3, 3],
-            'movieId': [1, 2, 3, 1, 4, 2, 3, 5],
-            'rating': [4.0, 3.5, 4.5, 5.0, 3.0, 4.0, 4.5, 3.5]
-        })
+        # Intentar cargar datos reales desde CSV
+        try:
+            movies_path = os.path.join(const.BASE_DIR, 'data', 'raw', 'movies.csv')
+            ratings_path = os.path.join(const.BASE_DIR, 'data', 'raw', 'ratings.csv')
+            
+            _movies_data = pd.read_csv(movies_path, encoding='utf-8')
+            _ratings_data = pd.read_csv(ratings_path, encoding='utf-8')
+            
+            # Verificar estructura esperada
+            assert {"movieId", "title", "genres"}.issubset(_movies_data.columns), "movies.csv no tiene las columnas esperadas"
+            assert {"userId", "movieId", "rating"}.issubset(_ratings_data.columns), "ratings.csv no tiene las columnas esperadas"
+            
+            # Asegurar tipos correctos
+            _ratings_data["rating"] = pd.to_numeric(_ratings_data["rating"], errors="coerce")
+            
+            print(f"Datos cargados: {len(_movies_data)} películas, {len(_ratings_data)} ratings")
+            data_source = "real_csv_files"
+            
+        except (FileNotFoundError, pd.errors.EmptyDataError, AssertionError) as e:
+            print(f"No se pudieron cargar los archivos CSV reales: {e}")
+            print("Usando estructura mínima compatible con el modelo entrenado...")
+            
+            # Usar estructura mínima que simule el formato real pero sin datos sesgados
+            # Solo un conjunto básico para que el API funcione sin sesgar el modelo
+            _movies_data = pd.DataFrame({
+                'movieId': [1, 2, 3, 4, 5],
+                'title': [
+                    'Movie Sample 1', 'Movie Sample 2', 'Movie Sample 3', 
+                    'Movie Sample 4', 'Movie Sample 5'
+                ],
+                'genres': [
+                    'Action', 'Comedy', 'Drama', 'Horror', 'Romance'
+                ]
+            })
+            
+            _ratings_data = pd.DataFrame({
+                'userId': [1, 1, 2, 2, 3],
+                'movieId': [1, 2, 1, 3, 2],
+                'rating': [4.0, 3.5, 5.0, 2.5, 4.5]
+            })
+            
+            data_source = "minimal_fallback"
         
         _loaded_model_data = {
             'model': knn_model,
+            'model_available': model_available,
+            'data_source': data_source,
             'model_info': {
-                'type': 'K-Nearest Neighbors',
-                'algorithm': 'cosine similarity',
-                'n_neighbors': getattr(knn_model, 'n_neighbors', 11)
+                'type': 'K-Nearest Neighbors' if model_available else 'Rule-based Recommendation',
+                'algorithm': 'cosine similarity' if model_available else 'genre-based',
+                'n_neighbors': getattr(knn_model, 'n_neighbors', 11) if knn_model else 5,
+                'data_source': data_source
             }
         }
         
         return _loaded_model_data, _movies_data, _ratings_data
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error cargando modelo: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error cargando datos: {str(e)}")
 
 def get_movie_recommendations_by_similarity(movie_id, num_recommendations=5):
     """Obtiene recomendaciones basadas en similitud de películas"""
@@ -280,6 +297,11 @@ def recommend_movies(request: MovieRecommendationRequest):
             recommendation_type = "películas mejor calificadas"
         
         # Crear interpretación
+        model_data, _, _ = load_movies_model_and_data()
+        data_warning = ""
+        if model_data['data_source'] == 'minimal_fallback':
+            data_warning = "\n⚠️  ADVERTENCIA: Usando datos mínimos. Para mejores recomendaciones, proporcione archivos movies.csv y ratings.csv reales."
+        
         if recommendations:
             top_movie = recommendations[0]
             interpretation = (
@@ -298,10 +320,10 @@ def recommend_movies(request: MovieRecommendationRequest):
                 interpretation += f"\nOtras recomendaciones: {', '.join([r['title'] for r in recommendations[1:3]])}"
                 if len(recommendations) > 3:
                     interpretation += "..."
+            
+            interpretation += data_warning
         else:
-            interpretation = "❌ No se encontraron recomendaciones con los criterios especificados."
-        
-        model_data, _, _ = load_movies_model_and_data()
+            interpretation = f"❌ No se encontraron recomendaciones con los criterios especificados.{data_warning}"
         
         return MovieRecommendationResponse(
             recommendations=recommendations,
@@ -309,7 +331,8 @@ def recommend_movies(request: MovieRecommendationRequest):
                 "model_type": model_data['model_info']['type'],
                 "algorithm": model_data['model_info']['algorithm'],
                 "recommendations_count": len(recommendations),
-                "recommendation_type": recommendation_type
+                "recommendation_type": recommendation_type,
+                "data_source": model_data['data_source']
             },
             interpretation=interpretation
         )
@@ -328,6 +351,10 @@ def predict_movie_rating(request: MovieRatingRequest):
         # Obtener información de la película
         model_data, movies_df, ratings_df = load_movies_model_and_data()
         movie_info = movies_df[movies_df['movieId'] == request.movie_id]
+        
+        data_warning = ""
+        if model_data['data_source'] == 'minimal_fallback':
+            data_warning = "\n⚠️  ADVERTENCIA: Usando datos mínimos. Para predicciones más precisas, proporcione archivos movies.csv y ratings.csv reales."
         
         if not movie_info.empty:
             movie_title = movie_info.iloc[0]['title']
@@ -360,7 +387,7 @@ def predict_movie_rating(request: MovieRatingRequest):
             f"Géneros: {movie_genres}\n"
             f"Rating predicho: {prediction:.1f}/5.0\n"
             f"Predicción: {taste_level}\n"
-            f"Confianza: {confidence:.1f}%"
+            f"Confianza: {confidence:.1f}%{data_warning}"
         )
         
         return MovieRatingResponse(
@@ -370,7 +397,8 @@ def predict_movie_rating(request: MovieRatingRequest):
                 "model_type": model_data['model_info']['type'],
                 "user_id": request.user_id,
                 "movie_id": request.movie_id,
-                "movie_title": movie_title
+                "movie_title": movie_title,
+                "data_source": model_data['data_source']
             },
             interpretation=interpretation
         )
@@ -384,10 +412,13 @@ def health():
         model_data, movies_df, ratings_df = load_movies_model_and_data()
         return {
             "status": "healthy",
-            "model_loaded": True,
+            "model_available": model_data['model_available'],
             "model_type": model_data['model_info']['type'],
+            "data_source": model_data['data_source'],
             "movies_count": len(movies_df),
-            "ratings_count": len(ratings_df)
+            "ratings_count": len(ratings_df),
+            "recommendation_method": "ML Model" if model_data['model_available'] else "Rule-based",
+            "warning": "Using minimal fallback data. Provide real movies.csv and ratings.csv for better recommendations." if model_data['data_source'] == 'minimal_fallback' else None
         }
     except Exception as e:
         return {"status": "error", "error": str(e)}
