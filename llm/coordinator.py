@@ -8,9 +8,9 @@ llm = Ollama(model="llama3")
 MODELS_CONFIG = {
     "bitcoin": {
         "endpoint": "http://localhost:8000/bitcoin/models/bitcoin/predict",
-        "description": "Para predicciones de precios de Bitcoin, criptomonedas, análisis financiero",
+        "description": "Para predicciones de precios de Bitcoin usando series de tiempo (Prophet), análisis temporal y tendencias futuras",
         "available": True,
-        "response_type": "prediction"
+        "response_type": "time_series_prediction"
     },
     "properties": {
         "endpoint": "http://localhost:8000/properties/models/properties/predict",
@@ -47,53 +47,68 @@ MODELS_CONFIG = {
 
 def extract_bitcoin_parameters(query: str):
     """
-    Extrae parámetros numéricos del texto para el modelo Bitcoin
+    Extrae parámetros para el modelo Prophet de Bitcoin (series de tiempo)
     """
     extraction_prompt = f"""
-    Extrae valores numéricos específicos para predicción de Bitcoin del siguiente texto:
+    Extrae información específica para predicción de Bitcoin usando Prophet del siguiente texto:
     
     "{query}"
     
     Busca y extrae SOLO los valores que se mencionen explícitamente:
-    - Precio actual/open (ej: "precio actual 32500", "bitcoin está en 31000")
-    - Precio máximo/high (ej: "máximo 33000", "high 32800")
-    - Precio mínimo/low (ej: "mínimo 31500", "low 31200")
-    - Volumen (ej: "volumen 2B", "2 billones de volumen", "1.5B USD")
-    - Market cap (ej: "market cap 600B", "capitalización 700 billones")
-    - RSI (ej: "RSI 65", "RSI de 72.5")
-    - Medias móviles (ej: "MA5 31800", "media móvil 20 días 31500")
+    - Fechas específicas para predicción (ej: "precio para 2025-01-15", "predice el 25 de diciembre", "qué precio tendrá el 1 de enero")
+    - Rango de fechas (ej: "próxima semana", "próximos 30 días", "siguiente mes")
+    - Número de días a predecir (ej: "próximos 7 días", "siguiente semana", "próximo mes")
     
-    Responde SOLO en formato JSON válido con los valores encontrados:
+    Si se menciona una fecha específica, conviértela a formato YYYY-MM-DD.
+    Si se menciona un rango relativo, calcula las fechas correspondientes desde hoy (2025-10-24).
+    
+    Responde SOLO en formato JSON válido:
     {{
-        "open_price": 32500.0,
-        "high_price": null,
-        "volume": 2000000000.0,
-        "rsi_14": 65.0
+        "dates": ["2025-01-15", "2025-01-16"],
+        "query": "predicción de precio de Bitcoin para enero 2025"
     }}
     
-    Si NO encuentras un valor específico, usa null.
-    NO inventes valores, SOLO extrae los mencionados explícitamente.
+    Si NO se mencionan fechas específicas, usa un rango de 7 días desde hoy:
+    {{
+        "dates": ["2025-10-25", "2025-10-26", "2025-10-27", "2025-10-28", "2025-10-29", "2025-10-30", "2025-10-31"],
+        "query": "predicción de precio de Bitcoin para próximos 7 días"
+    }}
     """
     
     try:
         extraction_result = llm.invoke(extraction_prompt)
-        # Intentar parsear como JSON
         import json
         import re
+        from datetime import datetime, timedelta
         
         # Limpiar la respuesta para extraer solo el JSON
         json_match = re.search(r'\{.*\}', extraction_result, re.DOTALL)
         if json_match:
             json_str = json_match.group()
             extracted_params = json.loads(json_str)
-            # Filtrar valores null
-            filtered_params = {k: v for k, v in extracted_params.items() if v is not None}
-            return filtered_params
+            
+            # Validar que las fechas estén en formato correcto
+            dates = extracted_params.get("dates", [])
+            if not dates:
+                # Generar fechas por defecto (próximos 7 días)
+                today = datetime.now()
+                dates = [(today + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(1, 8)]
+                extracted_params["dates"] = dates
+                
+            return extracted_params
         else:
-            return {}
+            # Respaldo: próximos 7 días
+            today = datetime.now()
+            dates = [(today + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(1, 8)]
+            return {"dates": dates, "query": query}
+            
     except Exception as e:
-        print(f"Error extrayendo parámetros: {e}")
-        return {}
+        print(f"Error extrayendo parámetros de Bitcoin: {e}")
+        # Respaldo: próximos 7 días
+        from datetime import datetime, timedelta
+        today = datetime.now()
+        dates = [(today + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(1, 8)]
+        return {"dates": dates, "query": query}
 
 def extract_properties_parameters(query: str):
     """
@@ -294,9 +309,16 @@ def interpretar_y_ejecutar(query: str):
     Tu tarea es interpretar este resultado y explicárselo al usuario de forma natural, clara y útil.
 
     Instrucciones específicas según el tipo de modelo:
+    - Si es 'time_series_prediction' (predicción temporal): Explica las tendencias, fechas específicas, valores predichos y intervalos de confianza
     - Si es 'prediction' (predicción): Incluye el valor predicho, tendencia y nivel de confianza
     - Si es 'classification' (clasificación): Explica la categoría predicha y probabilidad
     - Si es 'recommendation' (recomendación): Lista las recomendaciones principales y razones
+
+    Para predicciones de Bitcoin con Prophet:
+    - Menciona las fechas específicas y sus precios predichos
+    - Explica la tendencia general (alcista, bajista, estable)
+    - Incluye los intervalos de confianza si están disponibles
+    - Menciona limitaciones del modelo (predicciones son estimaciones)
 
     Instrucciones generales:
     1. Explica qué significa el resultado en términos simples
@@ -319,13 +341,38 @@ def format_fallback_response(modelo: str, result: dict, response_type: str):
     Formatea una respuesta de respaldo cuando falla la interpretación del LLM
     """
     try:
-        if response_type == "prediction":
-            if modelo == "bitcoin" and "prediction" in result:
+        if response_type == "time_series_prediction" and modelo == "bitcoin":
+            # Nuevo formato para el modelo Prophet de Bitcoin
+            if "predictions" in result:
+                predictions = result.get("predictions", [])
+                if predictions:
+                    # Mostrar las primeras 3 predicciones
+                    preview = predictions[:3]
+                    formatted_preds = []
+                    for pred in preview:
+                        date = pred.get("date", "Fecha desconocida")
+                        price = pred.get("predicted_price", 0)
+                        formatted_preds.append(f"{date}: ${price:,.2f}")
+                    
+                    total_days = len(predictions)
+                    confidence = result.get("confidence", 0)
+                    model_type = result.get("model_info", {}).get("model_type", "Prophet")
+                    
+                    response = f"📈 Predicciones Bitcoin ({model_type}):\n"
+                    response += "\n".join(formatted_preds)
+                    if total_days > 3:
+                        response += f"\n... y {total_days - 3} días más"
+                    response += f"\n\n🎯 Confianza del modelo: {confidence:.1f}%"
+                    return response
+            
+            elif "prediction" in result:
+                # Formato de respaldo para predicción única
                 prediction = result.get("prediction", 0)
                 confidence = result.get("confidence", 0)
-                return f"💰 Predicción de Bitcoin: ${prediction:,.2f} USD (Confianza: {confidence:.1f}%)"
-            
-            elif modelo == "properties" and "prediction" in result:
+                return f"💰 Predicción Bitcoin: ${prediction:,.2f} USD (Confianza: {confidence:.1f}%)"
+                
+        elif response_type == "prediction":
+            if modelo == "properties" and "prediction" in result:
                 prediction = result.get("prediction", 0)
                 confidence = result.get("confidence", 0)
                 return f"🏠 Precio estimado de propiedad: ${prediction:,.2f} USD (Confianza: {confidence:.1f}%)"

@@ -10,9 +10,8 @@ import os
 import sys
 from typing import Dict, Optional
 
-# Agregar el directorio padre al path para importar constants
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from notebooks import constants as const
+# Importar constantes desde el paquete api
+from .. import constants as const
 
 app = FastAPI(title="Properties Price Prediction API", version="1.0.0")
 
