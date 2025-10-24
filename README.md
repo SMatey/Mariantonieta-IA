@@ -113,43 +113,42 @@ El nuevo modelo Prophet permite consultas como:
 
 ## Script unificado (run_all.sh)
 
-Hay un script de conveniencia `run_all.sh` que arranca los componentes en segundo plano. Antes de usarlo, asegúrate de que los comandos existentes (uvicorn, ollama, python) funcionen desde tu shell.
-
-Contenido de ejemplo (ya incluido en el repo):
-
-```bash
-#!/bin/bash
-source venv/bin/activate
-echo "🚀 Iniciando API de Machine Learning..."
-uvicorn api.main:app --port 8000 &
-
-echo "🧠 Iniciando LLM (Ollama) si está instalado..."
-ollama serve &
-
-echo "🔗 Iniciando coordinador LLM..."
-python3 llm/coordinator.py &
-
-echo "💻 Iniciando frontend..."
-cd frontend || cd interface
-npm run dev
-```
-
-Haz el script ejecutable y ejecútalo:
+Hay un script de conveniencia `run_all.sh` que arranca los componentes en segundo plano:
 
 ```bash
 chmod +x run_all.sh
 ./run_all.sh
 ```
 
-## Estructura del proyecto (resumen)
+El script incluye:
+- ✅ Activación automática del entorno virtual
+- ✅ Inicio de la API optimizada con `uvicorn`
+- ✅ Configuración correcta de puertos y hosts
+- ✅ Manejo de errores y dependencias
 
-- `api/` — microservicio(s) y endpoints para los modelos ML
-- `llm/` — coordinador/puente entre los modelos y el LLM
-- `frontend/` o `interface/` — interfaz React (UI)
-- `models/` — modelos preentrenados (.pkl u otros)
-- `data/` — datos raw/processed/examples
-- `notebooks/` — notebooks exploratorios
-- `tests/` — pruebas unitarias y de integración
+## Estructura del proyecto
+
+```
+proyecto/
+├── api/                     # 🔥 APIs REST para modelos ML
+│   ├── main.py             # Entrada principal de la API
+│   ├── constants.py        # 🆕 Constantes centralizadas
+│   ├── routes/             # Rutas específicas por modelo
+│   │   ├── bitcoin_api.py  # 🔮 API Prophet para Bitcoin
+│   │   ├── movies_api.py   # 🎬 API recomendaciones
+│   │   └── properties_api.py # 🏠 API predicción propiedades
+│   └── core/               # Configuración central
+├── llm/                    # 🧠 Coordinador LLM mejorado
+│   └── coordinator.py      # 🆕 Coordinador con extracción inteligente
+├── frontend/               # 💻 Interfaz React
+├── models/                 # 🤖 Modelos ML entrenados
+│   ├── prophet_bitcoin_v2_*.pkl  # 🆕 Modelo Prophet
+│   ├── knn_movie_*.pkl           # Recomendaciones
+│   └── random_forest_*.pkl       # Otros modelos
+├── data/                   # 📊 Datasets
+├── notebooks/              # 📚 Análisis exploratorio
+└── tests/                  # 🧪 Pruebas automatizadas
+```
 
 ## Solución de problemas común
 
