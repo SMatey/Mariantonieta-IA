@@ -11,20 +11,14 @@ import random
 from datetime import datetime
 from typing import Dict, Optional
 import requests
+from ..models.bitcoin_api_models import PredictionRequest, PredictionResponse
 
 # Importar constantes desde el paquete api
 from .. import constants as const
 
 app = FastAPI(title="Bitcoin Real Data Prediction API", version="1.0.0")
 
-class PredictionRequest(BaseModel):
-    dates: list[str]  # lista de fechas a predecir (YYYY-MM-DD)
 
-class PredictionResponse(BaseModel):
-    prediction: float
-    confidence: float
-    model_info: Dict
-    interpretation: str
 
 # Variable global para el modelo
 _loaded_model_data = None

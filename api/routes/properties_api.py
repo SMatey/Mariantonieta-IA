@@ -7,35 +7,13 @@ import pickle
 import pandas as pd
 import numpy as np
 import os
-import sys
-from typing import Dict, Optional
+from ..models.properties_api_models import PropertyPredictionRequest, PropertyPredictionResponse
 
 # Importar constantes desde el paquete api
 from .. import constants as const
 
 app = FastAPI(title="Properties Price Prediction API", version="1.0.0")
 
-class PropertyPredictionRequest(BaseModel):
-    query: str
-    # Características de la propiedad
-    bathroomcnt: Optional[float] = None
-    bedroomcnt: Optional[float] = None
-    finishedsquarefeet: Optional[float] = None
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    lotsizesquarefeet: Optional[float] = None
-    yearbuilt: Optional[float] = None
-    taxamount: Optional[float] = None
-    assessmentyear: Optional[float] = None
-    landtaxvaluedollarcnt: Optional[float] = None
-    structuretaxvaluedollarcnt: Optional[float] = None
-    censustractandblock: Optional[float] = None
-
-class PropertyPredictionResponse(BaseModel):
-    prediction: float
-    confidence: float
-    model_info: Dict
-    interpretation: str
 
 # Variable global para el modelo
 _loaded_model_data = None
