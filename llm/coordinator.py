@@ -24,7 +24,12 @@ MODELS_CONFIG = {
         "available": True,
         "response_type": "recommendation"
     },
-    # Modelos en desarrollo
+    "flights": {
+        "endpoint": "http://localhost:8000/flights/models/flights/predict",
+        "description": "Para predicciones de retrasos de vuelos, análisis de puntualidad y planificación de viajes",
+        "available": True,
+        "response_type": "flight_prediction"
+    },
     "wine": {
         "endpoint": "http://localhost:8000/wine/classify",
         "description": "Para clasificación de vinos basada en características químicas",
@@ -145,6 +150,118 @@ def extract_properties_parameters(query: str):
         print(f"Error extrayendo parámetros de propiedades: {e}")
         return {}
 
+def extract_flights_parameters(query: str):
+    """
+    Extrae parámetros para predicción de retrasos de vuelos
+    """
+    extraction_prompt = f"""
+    Extrae información de vuelos del siguiente texto:
+    
+    "{query}"
+    
+    Busca y extrae SOLO los valores mencionados explícitamente:
+    - Fecha de vuelo (ej: "mañana", "25 de octubre", "2025-10-25", "hoy")
+    - Hora de salida (ej: "7:00 AM", "19:30", "3 p.m.", "15:00")
+    - Aeropuerto origen (ej: "SFO", "San Francisco", "LAX", "Los Angeles", "Denver", "Las Vegas")
+    - Aeropuerto destino (ej: "JFK", "Nueva York", "ORD", "Chicago")
+    - Aerolínea (ej: "United", "UA", "American Airlines", "AA", "Delta", "DL", "Southwest", "WN")
+    - Distancia (ej: "2586 km", "1500 millas") - SOLO si se menciona explícitamente
+    - Retraso en salida (ej: "retraso de 15 minutos", "sale con 20 min de atraso") - SOLO si se menciona explícitamente
+    
+    INSTRUCCIONES IMPORTANTES:
+    - Convierte códigos de aeropuertos a códigos IATA de 3 letras
+    - Convierte fechas relativas a formato YYYY-MM-DD (hoy es 2025-10-24)
+    - Convierte horas a formato HH:MM (24 horas)
+    - Si NO encuentras un valor específico, NO lo incluyas en la respuesta
+    - Para delay_at_departure usa SOLO números (ej: 15, 0, 30), NUNCA texto
+    
+    Mapeo de aerolíneas:
+    - Southwest = WN
+    - United = UA  
+    - American = AA
+    - Delta = DL
+    - JetBlue = B6
+    
+    Mapeo de aeropuertos:
+    - Denver = DEN
+    - Las Vegas = LAS
+    - San Francisco = SFO
+    - New York JFK = JFK
+    - Los Angeles = LAX
+    - Chicago = ORD
+    
+    Responde SOLO en formato JSON válido:
+    {{
+        "date": "2025-10-24",
+        "departure_time": "15:00",
+        "origin": "DEN",
+        "destination": "LAS",
+        "airline": "WN"
+    }}
+    
+    NO incluyas campos con valores null, undefined, o texto descriptivo.
+    Si no hay retraso mencionado, NO incluyas delay_at_departure.
+    """
+    
+    try:
+        extraction_result = llm.invoke(extraction_prompt)
+        import json
+        import re
+        from datetime import datetime, timedelta
+        
+        json_match = re.search(r'\{.*\}', extraction_result, re.DOTALL)
+        if json_match:
+            json_str = json_match.group()
+            extracted_params = json.loads(json_str)
+            
+            # Procesar fecha si es relativa
+            if extracted_params.get("date"):
+                date_str = extracted_params["date"]
+                if "mañana" in date_str.lower() or "tomorrow" in date_str.lower():
+                    tomorrow = datetime.now() + timedelta(days=1)
+                    extracted_params["date"] = tomorrow.strftime("%Y-%m-%d")
+                elif "hoy" in date_str.lower() or "today" in date_str.lower():
+                    today = datetime.now()
+                    extracted_params["date"] = today.strftime("%Y-%m-%d")
+            
+            # Validar y limpiar valores numéricos
+            if "delay_at_departure" in extracted_params:
+                delay_value = extracted_params["delay_at_departure"]
+                if isinstance(delay_value, str):
+                    # Intentar extraer números del texto
+                    import re
+                    numbers = re.findall(r'\d+', delay_value)
+                    if numbers:
+                        extracted_params["delay_at_departure"] = float(numbers[0])
+                    else:
+                        # Si no hay números, remover el campo
+                        del extracted_params["delay_at_departure"]
+                elif not isinstance(delay_value, (int, float)):
+                    del extracted_params["delay_at_departure"]
+            
+            if "distance" in extracted_params:
+                distance_value = extracted_params["distance"]
+                if isinstance(distance_value, str):
+                    # Intentar extraer números del texto
+                    import re
+                    numbers = re.findall(r'\d+', distance_value)
+                    if numbers:
+                        extracted_params["distance"] = float(numbers[0])
+                    else:
+                        del extracted_params["distance"]
+                elif not isinstance(distance_value, (int, float)):
+                    del extracted_params["distance"]
+            
+            # Filtrar valores null y vacíos
+            filtered_params = {k: v for k, v in extracted_params.items() 
+                             if v is not None and v != "" and v != "null"}
+            return filtered_params
+        else:
+            return {}
+    except Exception as e:
+        print(f"Error extrayendo parámetros de vuelos: {e}")
+        return {}
+
 def extract_movies_parameters(query: str):
     """
     Extrae parámetros para recomendaciones de películas
@@ -251,6 +368,12 @@ def interpretar_y_ejecutar(query: str):
                     data.update(bitcoin_params)
                     print(f"🎯 Parámetros extraídos para Bitcoin: {bitcoin_params}")
             
+            elif modelo == "flights":
+                flights_params = extract_flights_parameters(query)
+                if flights_params:
+                    data.update(flights_params)
+                    print(f"✈️ Parámetros extraídos para Vuelos: {flights_params}")
+            
             elif modelo == "properties":
                 properties_params = extract_properties_parameters(query)
                 if properties_params:
@@ -294,6 +417,8 @@ def interpretar_y_ejecutar(query: str):
     Tu tarea es interpretar este resultado y explicárselo al usuario de forma natural, clara y útil.
 
     Instrucciones específicas según el tipo de modelo:
+    - Si es 'time_series_prediction' (predicción temporal): Explica las tendencias, fechas específicas, valores predichos y intervalos de confianza
+    - Si es 'flight_prediction' (predicción de vuelos): Explica el retraso esperado, factores que influyen, nivel de confianza y recomendaciones
     - Si es 'prediction' (predicción): Incluye el valor predicho, tendencia y nivel de confianza
     - Si es 'classification' (clasificación): Explica la categoría predicha y probabilidad
     - Si es 'recommendation' (recomendación): Lista las recomendaciones principales y razones
@@ -308,6 +433,7 @@ def interpretar_y_ejecutar(query: str):
     """
 
     try:
+        # Siempre usar el LLM para generar una respuesta conversacional completa
         explicacion = llm.invoke(interpretation_prompt)
         return explicacion
     except Exception as e:
@@ -319,8 +445,62 @@ def format_fallback_response(modelo: str, result: dict, response_type: str):
     Formatea una respuesta de respaldo cuando falla la interpretación del LLM
     """
     try:
-        if response_type == "prediction":
-            if modelo == "bitcoin" and "prediction" in result:
+        if response_type == "flight_prediction" and modelo == "flights":
+            # Nuevo formato para predicción de vuelos
+            if "prediction" in result:
+                delay_minutes = result.get("prediction", 0)
+                confidence = result.get("confidence", 0)
+                flight_info = result.get("flight_info", {})
+                
+                route = flight_info.get("route", "Vuelo")
+                airline = flight_info.get("airline", "")
+                departure = flight_info.get("departure", "")
+                
+                if delay_minutes <= 5:
+                    status_emoji = "✅"
+                    status = "puntual"
+                elif delay_minutes <= 15:
+                    status_emoji = "🟡"
+                    status = "retraso leve"
+                elif delay_minutes <= 30:
+                    status_emoji = "🟠"
+                    status = "retraso moderado"
+                else:
+                    status_emoji = "🔴"
+                    status = "retraso significativo"
+                
+                response = f"{status_emoji} Predicción vuelo {airline} {route}:\n"
+                response += f"🕐 Retraso esperado: {delay_minutes:.0f} minutos ({status})\n"
+                response += f"📅 Salida: {departure}\n"
+                response += f"🎯 Confianza: {confidence:.1f}%"
+                return response
+                
+        elif response_type == "time_series_prediction" and modelo == "bitcoin":
+            # Nuevo formato para el modelo Prophet de Bitcoin
+            if "predictions" in result:
+                predictions = result.get("predictions", [])
+                if predictions:
+                    # Mostrar las primeras 3 predicciones
+                    preview = predictions[:3]
+                    formatted_preds = []
+                    for pred in preview:
+                        date = pred.get("date", "Fecha desconocida")
+                        price = pred.get("predicted_price", 0)
+                        formatted_preds.append(f"{date}: ${price:,.2f}")
+                    
+                    total_days = len(predictions)
+                    confidence = result.get("confidence", 0)
+                    model_type = result.get("model_info", {}).get("model_type", "Prophet")
+                    
+                    response = f"📈 Predicciones Bitcoin ({model_type}):\n"
+                    response += "\n".join(formatted_preds)
+                    if total_days > 3:
+                        response += f"\n... y {total_days - 3} días más"
+                    response += f"\n\n🎯 Confianza del modelo: {confidence:.1f}%"
+                    return response
+            
+            elif "prediction" in result:
+                # Formato de respaldo para predicción única
                 prediction = result.get("prediction", 0)
                 confidence = result.get("confidence", 0)
                 return f"💰 Predicción de Bitcoin: ${prediction:,.2f} USD (Confianza: {confidence:.1f}%)"

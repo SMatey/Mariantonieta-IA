@@ -33,6 +33,13 @@ except ImportError as e:
     print(f"⚠️  Movies API no disponible: {e}")
     MOVIES_AVAILABLE = False
 
+try:
+    from .routes.flights_api import app as flights_app, load_flights_model
+    FLIGHTS_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️  Flights API no disponible: {e}")
+    FLIGHTS_AVAILABLE = False
+
 app = FastAPI(
     title="AI Models API Hub",
     description="API centralizada para múltiples modelos de Machine Learning",
@@ -69,6 +76,9 @@ if PROPERTIES_AVAILABLE:
 if MOVIES_AVAILABLE:
     app.mount("/movies", movies_app)
 
+if FLIGHTS_AVAILABLE:
+    app.mount("/flights", flights_app)
+
 @app.get("/", response_model=HealthResponse)
 def root():
     """Endpoint principal con información de la API"""
@@ -79,6 +89,8 @@ def root():
         available_models.append("properties")
     if MOVIES_AVAILABLE:
         available_models.append("movies")
+    if FLIGHTS_AVAILABLE:
+        available_models.append("flights")
     
     return HealthResponse(
         status="active",
