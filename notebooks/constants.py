@@ -1,13 +1,13 @@
 from pathlib import Path
 
-# Directorio base (la carpeta donde está este archivo)
-BASE_DIR = Path(__file__).resolve().parent.parent
+# Directorio base (la carpeta raíz del proyecto)
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 
 # Directorio donde guardar/leer datos
 DATA_DIR = BASE_DIR / "data/raw"
 # Nombre del archivo CSV con precios de bitcoin
-BITCOIN_CSV_FILENAME = "bitcoin_price_Training - Training.csv"
+BITCOIN_CSV_FILENAME = "bitcoin_price_Training.csv"
 
 FLIGHTS_CSV_FILENAME = "DelayedFlights.csv"
 # Ruta completa al CSV (Path object)

@@ -10,7 +10,6 @@ __pycache__/
 .venv311/
 **/.venv*/
 
-
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
@@ -18,3 +17,11 @@ frontend/.vite/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Archivos de modelos grandes (>100MB)
+models/random_forest_properties_20251017_165834.pkl
+models/*_properties_*.pkl
+models/large_*.pkl
+
+# Archivos de modelos grandes en general (opcional - descomenta si quieres excluir todos los modelos grandes)
+# models/*.pkl

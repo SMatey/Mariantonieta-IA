@@ -13,21 +13,21 @@ from llm.coordinator import interpretar_y_ejecutar
 
 # Importar las APIs de los modelos
 try:
-    from api.routes.bitcoin_api import app as bitcoin_app, load_bitcoin_model
+    from .routes.bitcoin_api import app as bitcoin_app, load_bitcoin_model
     BITCOIN_AVAILABLE = True
 except ImportError as e:
     print(f"⚠️  Bitcoin API no disponible: {e}")
     BITCOIN_AVAILABLE = False
 
 try:
-    from api.routes.properties_api import app as properties_app, load_properties_model
+    from .routes.properties_api import app as properties_app, load_properties_model
     PROPERTIES_AVAILABLE = True
 except ImportError as e:
     print(f"⚠️  Properties API no disponible: {e}")
     PROPERTIES_AVAILABLE = False
 
 try:
-    from api.routes.movies_api import app as movies_app, load_movies_model_and_data
+    from .routes.movies_api import app as movies_app, load_movies_model_and_data
     MOVIES_AVAILABLE = True
 except ImportError as e:
     print(f"⚠️  Movies API no disponible: {e}")
