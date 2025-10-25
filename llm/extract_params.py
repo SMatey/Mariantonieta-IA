@@ -12,7 +12,6 @@ def extract_bitcoin_parameters(query: str, llm: Ollama):
     Busca y extrae SOLO los valores que se mencionen explícitamente:
     - Fechas específicas para predicción (ej: "precio para 2025-01-15", "predice el 25 de diciembre", "qué precio tendrá el 1 de enero")
     - Rango de fechas (ej: "próxima semana", "próximos 30 días", "siguiente mes")
-    - Número de días a predecir (ej: "próximos 7 días", "siguiente semana", "próximo mes")
     
     Si se menciona una fecha específica, conviértela a formato YYYY-MM-DD.
     Si se menciona un rango relativo, calcula las fechas correspondientes desde hoy (2025-10-24).
@@ -21,12 +20,6 @@ def extract_bitcoin_parameters(query: str, llm: Ollama):
     {{
         "dates": ["2025-01-15", "2025-01-16"],
         "query": "predicción de precio de Bitcoin para enero 2025"
-    }}
-    
-    Si NO se mencionan fechas específicas, usa un rango de 7 días desde hoy:
-    {{
-        "dates": ["2025-10-25", "2025-10-26", "2025-10-27", "2025-10-28", "2025-10-29", "2025-10-30", "2025-10-31"],
-        "query": "predicción de precio de Bitcoin para próximos 7 días"
     }}
     """
 

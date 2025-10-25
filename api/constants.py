@@ -19,3 +19,4 @@ CSV_FLIGHTS_PATH = DATA_DIR / FLIGHTS_CSV_FILENAME
 
 # Directorio de modelos
 MODELS_DIR = BASE_DIR / "models"
+ML_MODELS_PATH = BASE_DIR / "ml_models"

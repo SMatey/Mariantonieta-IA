@@ -31,7 +31,7 @@ def load_movies_model_and_data():
     
     try:
         # Cargar modelo KNN
-        model_path = os.path.join(const.BASE_DIR, 'models', 'knn_movie_recommendation_model.pkl')
+        model_path = os.path.join(const.BASE_DIR, 'ml_models', 'knn_movie_recommendation_model.pkl')
         with open(model_path, 'rb') as f:
             knn_model = pickle.load(f)
         

@@ -30,7 +30,7 @@ def load_bitcoin_model():
         return _loaded_model_data
     
     try:
-        model_path = os.path.join(const.BASE_DIR, 'models', 'prophet_bitcoin_v2_2025-10-24.pkl')
+        model_path = os.path.join(const.BASE_DIR, 'ml_models', 'prophet_bitcoin_v2_2025-10-24.pkl')
         _loaded_model_data = joblib.load(model_path)  # Usar joblib.load en lugar de pickle.load
         return _loaded_model_data
     except Exception as e:
