@@ -41,6 +41,13 @@ except ImportError as e:
     print(f"⚠️  Flights API no disponible: {e}")
     FLIGHTS_AVAILABLE = False
 
+try:
+    from .routes.acv_api import app as acv_app, load_acv_model
+    ACV_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️  ACV API no disponible: {e}")
+    ACV_AVAILABLE = False
+
 app = FastAPI(
     title="AI Models API Hub",
     description="API centralizada para múltiples modelos de Machine Learning",
@@ -69,6 +76,9 @@ if MOVIES_AVAILABLE:
 if FLIGHTS_AVAILABLE:
     app.mount("/flights", flights_app)
 
+if ACV_AVAILABLE:
+    app.mount("/acv", acv_app)
+
 @app.get("/", response_model=HealthResponse)
 def root():
     """Endpoint principal con información de la API"""
@@ -81,6 +91,8 @@ def root():
         available_models.append("movies")
     if FLIGHTS_AVAILABLE:
         available_models.append("flights")
+    if ACV_AVAILABLE:
+        available_models.append("acv")
     
     return HealthResponse(
         status="active",
@@ -163,6 +175,37 @@ def health_check():
                 "error": str(e)
             }
     
+    # Verificar Flights API si está disponible
+    if FLIGHTS_AVAILABLE:
+        try:
+            flights_model = load_flights_model()
+            services_status["flights"] = {
+                "status": "healthy",
+                "model_type": flights_model['model_info']['type'],
+                "description": "Flight Delay Prediction Model"
+            }
+        except Exception as e:
+            services_status["flights"] = {
+                "status": "unhealthy",
+                "error": str(e)
+            }
+    
+    # Verificar ACV API si está disponible
+    if ACV_AVAILABLE:
+        try:
+            acv_model = load_acv_model()
+            services_status["acv"] = {
+                "status": "healthy",
+                "model_type": acv_model['model_info']['type'],
+                "accuracy": acv_model['model_info']['accuracy'],
+                "description": "Stroke Risk Prediction Model"
+            }
+        except Exception as e:
+            services_status["acv"] = {
+                "status": "unhealthy",
+                "error": str(e)
+            }
+    
     overall_status = "healthy" if all(
         service["status"] == "healthy" 
         for service in services_status.values()
@@ -173,7 +216,9 @@ def health_check():
         "services": services_status,
         "bitcoin_available": BITCOIN_AVAILABLE,
         "properties_available": PROPERTIES_AVAILABLE,
-        "movies_available": MOVIES_AVAILABLE
+        "movies_available": MOVIES_AVAILABLE,
+        "flights_available": FLIGHTS_AVAILABLE,
+        "acv_available": ACV_AVAILABLE
     }
 
 @app.get("/models")
@@ -219,6 +264,24 @@ def list_models():
             "status": "active"
         })
     
+    if FLIGHTS_AVAILABLE:
+        models.append({
+            "name": "flights",
+            "description": "Predicción de retrasos de vuelos usando Random Forest",
+            "endpoint": "/flights/predict",
+            "type": "Random Forest",
+            "status": "active"
+        })
+    
+    if ACV_AVAILABLE:
+        models.append({
+            "name": "acv",
+            "description": "Predicción de riesgo de accidente cerebrovascular usando Árbol de Decisión",
+            "endpoint": "/acv/predict",
+            "type": "Decision Tree",
+            "status": "active"
+        })
+    
     return {"available_models": models}
 
 if __name__ == "__main__":
@@ -231,6 +294,10 @@ if __name__ == "__main__":
         print("   • Properties Price Prediction (Random Forest)")
     if MOVIES_AVAILABLE:
         print("   • Movies Recommendation System (KNN)")
+    if FLIGHTS_AVAILABLE:
+        print("   • Flight Delay Prediction (Random Forest)")
+    if ACV_AVAILABLE:
+        print("   • ACV Risk Prediction (Decision Tree)")
     print("Documentación disponible en: http://localhost:8000/docs")
     
     uvicorn.run(

@@ -24,6 +24,12 @@ MODELS_CONFIG = {
         "available": True,
         "response_type": "flight_prediction"
     },
+    "acv": {
+        "endpoint": "http://localhost:8000/acv/predict",
+        "description": "Para evaluación de riesgo de accidente cerebrovascular (ACV/stroke) basado en características médicas y demográficas",
+        "available": True,
+        "response_type": "medical_classification"
+    },
     "wine": {
         "endpoint": "http://localhost:8000/wine/classify",
         "description": "Para clasificación de vinos basada en características químicas",

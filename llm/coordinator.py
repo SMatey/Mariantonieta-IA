@@ -5,7 +5,8 @@ from .extract_params import (
     extract_bitcoin_parameters,
     extract_flights_parameters,
     extract_properties_parameters,
-    extract_movies_parameters
+    extract_movies_parameters,
+    extract_acv_parameters
 )
 from .available_models import MODELS_CONFIG
 
@@ -95,6 +96,12 @@ def interpretar_y_ejecutar(query: str):
                 if "user_id" in data and "movie_id" in data:
                     model_config["endpoint"] = "http://localhost:8000/movies/models/movies/predict-rating"
             
+            elif modelo == "acv":
+                acv_params = extract_acv_parameters(query, llm)
+                if acv_params:
+                    data.update(acv_params)
+                    print(f"🏥 Parámetros extraídos para ACV: {acv_params}")
+            
             response = requests.post(model_config["endpoint"], json=data, timeout=60)
             
             if response.status_code == 200:
@@ -127,6 +134,7 @@ def interpretar_y_ejecutar(query: str):
     - Si es 'prediction' (predicción): Incluye el valor predicho, tendencia y nivel de confianza
     - Si es 'classification' (clasificación): Explica la categoría predicha y probabilidad
     - Si es 'recommendation' (recomendación): Lista las recomendaciones principales y razones
+    - Si es 'medical_classification' (clasificación médica): Explica el nivel de riesgo, probabilidad, factores de riesgo identificados y recomendaciones médicas
 
     Para predicciones de Bitcoin con Prophet:
     - Menciona las fechas específicas y sus precios predichos
@@ -176,6 +184,18 @@ def format_fallback_response(modelo: str, result: dict, response_type: str):
                 predicted_class = result.get("predicted_class", "Desconocido")
                 probability = result.get("probability", 0)
                 return f"🎯 Clasificación: {predicted_class} (Probabilidad: {probability:.1f}%)"
+        
+        elif response_type == "medical_classification":
+            if modelo == "acv":
+                prediction = result.get("prediction", 0)
+                probability = result.get("probability", 0)
+                risk_level = result.get("risk_level", "Desconocido")
+                confidence = result.get("confidence", 0)
+                
+                if prediction == 1:
+                    return f"⚠️ RIESGO ALTO de ACV: {probability:.1%} probabilidad - Nivel: {risk_level} (Confianza: {confidence:.1f}%)"
+                else:
+                    return f"✅ RIESGO BAJO de ACV: {(1-probability):.1%} probabilidad - Nivel: {risk_level} (Confianza: {confidence:.1f}%)"
                 
         elif response_type == "recommendation":
             if modelo == "movies":

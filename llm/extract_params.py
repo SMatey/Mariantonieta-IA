@@ -297,3 +297,142 @@ def extract_movies_parameters(query: str, llm: Ollama):
     except Exception as e:
         print(f"Error extrayendo parámetros de películas: {e}")
         return {}
+
+
+def extract_acv_parameters(query: str, llm: Ollama):
+    """
+    Extrae parámetros para evaluación de riesgo de ACV (Accidente Cerebrovascular)
+    """
+    extraction_prompt = f"""
+    Extrae información médica para evaluación de riesgo de ACV del siguiente texto:
+    
+    "{query}"
+    
+    Busca y extrae SOLO los valores mencionados explícitamente:
+    - Edad (ej: "65 años", "age 45", "tiene 70")
+    - Género (ej: "mujer", "hombre", "male", "female", "masculino", "femenino")
+    - Hipertensión (ej: "tiene hipertensión", "presión alta", "sin hipertensión", "hipertension", "hypertension")
+    - Enfermedad cardíaca (ej: "problemas del corazón", "enfermedad cardíaca", "sin problemas cardiacos", "heart disease")
+    - Estado civil (ej: "casado", "soltero", "married", "single")
+    - Tipo de trabajo (ej: "sector privado", "autónomo", "gobierno", "empleado", "private", "self-employed", "government")
+    - Tipo de residencia (ej: "urbano", "rural", "ciudad", "campo", "urban", "rural")
+    - Nivel de glucosa (ej: "glucosa 120", "azúcar en sangre 95", "glucose level 110")
+    - IMC/BMI (ej: "BMI 28", "índice masa corporal 25", "sobrepeso", "obeso")
+    - Estado de fumador (ej: "fumador", "no fuma", "ex fumador", "nunca fumó", "smoker", "never smoked", "formerly smoked")
+    
+    CONVERSIONES IMPORTANTES:
+    - Género: "mujer"/"femenino"/"female" → "Female", "hombre"/"masculino"/"male" → "Male"
+    - Hipertensión/Enfermedad cardíaca: "sí"/"tiene"/"con" → 1, "no"/"sin" → 0
+    - Estado civil: "casado"/"married" → "Yes", "soltero"/"single" → "No"
+    - Trabajo: "privado"/"empleado" → "Private", "autónomo" → "Self-employed", "gobierno" → "Govt_job"
+    - Residencia: "ciudad"/"urbano" → "Urban", "campo"/"rural" → "Rural"
+    - Fumador: "fuma"/"fumador" → "smokes", "no fuma"/"nunca fumó" → "never smoked", "ex fumador"/"antes fumaba" → "formerly smoked"
+    
+    Responde SOLO en formato JSON válido:
+    {{
+        "age": 65.0,
+        "gender": "Female",
+        "hypertension": 1,
+        "heart_disease": 0,
+        "ever_married": "Yes",
+        "work_type": "Private",
+        "residence_type": "Urban",
+        "avg_glucose_level": 120.0,
+        "bmi": 28.5,
+        "smoking_status": "never smoked"
+    }}
+    
+    Si NO encuentras un valor específico, usa null.
+    NO incluyas campos con valores null en la respuesta final.
+    """
+    
+    try:
+        extraction_result = llm.invoke(extraction_prompt)
+        import json
+        import re
+        
+        json_match = re.search(r'\{.*\}', extraction_result, re.DOTALL)
+        if json_match:
+            json_str = json_match.group()
+            extracted_params = json.loads(json_str)
+            
+            # Validar y convertir valores específicos
+            if "hypertension" in extracted_params:
+                hyp_value = extracted_params["hypertension"]
+                if isinstance(hyp_value, str):
+                    if any(word in hyp_value.lower() for word in ["sí", "si", "tiene", "con", "yes", "1"]):
+                        extracted_params["hypertension"] = 1
+                    elif any(word in hyp_value.lower() for word in ["no", "sin", "0"]):
+                        extracted_params["hypertension"] = 0
+                    else:
+                        del extracted_params["hypertension"]
+                elif hyp_value not in [0, 1]:
+                    del extracted_params["hypertension"]
+            
+            if "heart_disease" in extracted_params:
+                hd_value = extracted_params["heart_disease"]
+                if isinstance(hd_value, str):
+                    if any(word in hd_value.lower() for word in ["sí", "si", "tiene", "con", "yes", "1"]):
+                        extracted_params["heart_disease"] = 1
+                    elif any(word in hd_value.lower() for word in ["no", "sin", "0"]):
+                        extracted_params["heart_disease"] = 0
+                    else:
+                        del extracted_params["heart_disease"]
+                elif hd_value not in [0, 1]:
+                    del extracted_params["heart_disease"]
+            
+            # Validar valores numéricos
+            if "age" in extracted_params:
+                age_value = extracted_params["age"]
+                if isinstance(age_value, str):
+                    numbers = re.findall(r'\d+', age_value)
+                    if numbers:
+                        age = float(numbers[0])
+                        if 0 <= age <= 120:
+                            extracted_params["age"] = age
+                        else:
+                            del extracted_params["age"]
+                    else:
+                        del extracted_params["age"]
+                elif not isinstance(age_value, (int, float)) or not (0 <= age_value <= 120):
+                    del extracted_params["age"]
+            
+            if "avg_glucose_level" in extracted_params:
+                glucose_value = extracted_params["avg_glucose_level"]
+                if isinstance(glucose_value, str):
+                    numbers = re.findall(r'\d+\.?\d*', glucose_value)
+                    if numbers:
+                        glucose = float(numbers[0])
+                        if 50 <= glucose <= 400:  # Rango médicamente válido
+                            extracted_params["avg_glucose_level"] = glucose
+                        else:
+                            del extracted_params["avg_glucose_level"]
+                    else:
+                        del extracted_params["avg_glucose_level"]
+                elif not isinstance(glucose_value, (int, float)) or not (50 <= glucose_value <= 400):
+                    del extracted_params["avg_glucose_level"]
+            
+            if "bmi" in extracted_params:
+                bmi_value = extracted_params["bmi"]
+                if isinstance(bmi_value, str):
+                    numbers = re.findall(r'\d+\.?\d*', bmi_value)
+                    if numbers:
+                        bmi = float(numbers[0])
+                        if 10 <= bmi <= 60:  # Rango médicamente válido
+                            extracted_params["bmi"] = bmi
+                        else:
+                            del extracted_params["bmi"]
+                    else:
+                        del extracted_params["bmi"]
+                elif not isinstance(bmi_value, (int, float)) or not (10 <= bmi_value <= 60):
+                    del extracted_params["bmi"]
+            
+            # Filtrar valores null y vacíos
+            filtered_params = {k: v for k, v in extracted_params.items() 
+                             if v is not None and v != "" and v != "null"}
+            return filtered_params
+        else:
+            return {}
+    except Exception as e:
+        print(f"Error extrayendo parámetros de ACV: {e}")
+        return {}
