@@ -19,14 +19,6 @@ try:
 except ImportError as e:
     print(f"⚠️  Bitcoin API no disponible: {e}")
     BITCOIN_AVAILABLE = False
-
-try:
-    from .routes.properties_api import app as properties_app, load_properties_model
-    PROPERTIES_AVAILABLE = True
-except ImportError as e:
-    print(f"⚠️  Properties API no disponible: {e}")
-    PROPERTIES_AVAILABLE = False
-
 try:
     from .routes.movies_api import app as movies_app, load_movies_model_and_data
     MOVIES_AVAILABLE = True
@@ -74,9 +66,6 @@ app.add_middleware(
 if BITCOIN_AVAILABLE:
     app.mount("/bitcoin", bitcoin_app)
 
-if PROPERTIES_AVAILABLE:
-    app.mount("/properties", properties_app)
-
 if MOVIES_AVAILABLE:
     app.mount("/movies", movies_app)
 
@@ -95,8 +84,6 @@ def root():
     available_models = ["coordinator"]
     if BITCOIN_AVAILABLE:
         available_models.append("bitcoin")
-    if PROPERTIES_AVAILABLE:
-        available_models.append("properties")
     if MOVIES_AVAILABLE:
         available_models.append("movies")
     if FLIGHTS_AVAILABLE:
@@ -156,20 +143,6 @@ def health_check():
                 "error": str(e)
             }
     
-    # Verificar Properties API si está disponible
-    if PROPERTIES_AVAILABLE:
-        try:
-            properties_model = load_properties_model()
-            services_status["properties"] = {
-                "status": "healthy",
-                "model_type": properties_model['model_info']['type'],
-                "description": "Properties Price Prediction Model"
-            }
-        except Exception as e:
-            services_status["properties"] = {
-                "status": "unhealthy",
-                "error": str(e)
-            }
     
     # Verificar Movies API si está disponible
     if MOVIES_AVAILABLE:
@@ -243,7 +216,6 @@ def health_check():
         "overall_status": overall_status,
         "services": services_status,
         "bitcoin_available": BITCOIN_AVAILABLE,
-        "properties_available": PROPERTIES_AVAILABLE,
         "movies_available": MOVIES_AVAILABLE,
         "flights_available": FLIGHTS_AVAILABLE,
         "acv_available": ACV_AVAILABLE,
@@ -269,15 +241,6 @@ def list_models():
             "name": "bitcoin",
             "description": "Predicción de precios de Bitcoin usando Random Forest",
             "endpoint": "/bitcoin/models/bitcoin/predict",
-            "type": "Random Forest",
-            "status": "active"
-        })
-    
-    if PROPERTIES_AVAILABLE:
-        models.append({
-            "name": "properties",
-            "description": "Predicción de precios de propiedades usando Random Forest",
-            "endpoint": "/properties/models/properties/predict",
             "type": "Random Forest",
             "status": "active"
         })
@@ -338,8 +301,6 @@ if __name__ == "__main__":
     print("   • LLM Coordinator")
     if BITCOIN_AVAILABLE:
         print("   • Bitcoin Price Prediction (Random Forest)")
-    if PROPERTIES_AVAILABLE:
-        print("   • Properties Price Prediction (Random Forest)")
     if MOVIES_AVAILABLE:
         print("   • Movies Recommendation System (KNN)")
     if FLIGHTS_AVAILABLE:
