@@ -7,20 +7,21 @@ import wave
 import contextlib
 from typing import List
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException
 from pydantic import BaseModel
 from google.cloud import speech
 from google.oauth2 import service_account
 from dotenv import load_dotenv
 
-# Cargar .env si existe
+# Cargar .env
 load_dotenv()
 
 APP_NAME = "Mariantonieta-IA STT"
 DEFAULT_LANGUAGE = os.getenv("GCP_SPEECH_LANGUAGE", "es-CR")
 DEFAULT_ENCODING = os.getenv("GCP_SPEECH_ENCODING", "LINEAR16").upper()
 
-app = FastAPI(title=APP_NAME, version="0.1.0", docs_url="/docs", redoc_url="/redoc")
+# ⬇️ Ahora usamos un APIRouter en vez de FastAPI(app)
+router = APIRouter(prefix="/stt", tags=["speech-to-text"])
 
 
 class STTResponse(BaseModel):
@@ -62,12 +63,6 @@ def _encoding_enum(enc_str: str) -> speech.RecognitionConfig.AudioEncoding:
 
 
 def _make_speech_client() -> speech.SpeechClient:
-    """
-    Crea el cliente usando el .env, sin depender de exports en la terminal.
-    Reglas:
-      1) GOOGLE_APPLICATION_CREDENTIALS (ruta al JSON) -> requerido que exista.
-      2) Si no está, intenta ADC por defecto (solo GCP). 
-    """
     sa_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
     if sa_path:
         if not os.path.isabs(sa_path):
@@ -76,8 +71,10 @@ def _make_speech_client() -> speech.SpeechClient:
         if not os.path.exists(sa_path):
             raise HTTPException(
                 status_code=500,
-                detail=f"Credencial no encontrada en ruta '{sa_path}'. "
-                       f"Revisa GOOGLE_APPLICATION_CREDENTIALS en tu .env."
+                detail=(
+                    f"Credencial no encontrada en ruta '{sa_path}'. "
+                    f"Revisa GOOGLE_APPLICATION_CREDENTIALS en tu .env."
+                ),
             )
         creds = service_account.Credentials.from_service_account_file(sa_path)
         return speech.SpeechClient(credentials=creds)
@@ -86,12 +83,12 @@ def _make_speech_client() -> speech.SpeechClient:
     return speech.SpeechClient()
 
 
-@app.get("/health")
+@router.get("/health")
 def health():
     return {"status": "ok", "app": APP_NAME}
 
 
-@app.post("/stt", response_model=STTResponse)
+@router.post("", response_model=STTResponse)  # => POST /stt
 async def stt(file: UploadFile = File(...)):
     """Recibe un WAV (LINEAR16) y devuelve el transcript."""
     if not file:

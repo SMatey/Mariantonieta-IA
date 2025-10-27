@@ -26,125 +26,191 @@ export default function MariantoniettaAssistant() {
   const [currentResponse, setCurrentResponse] = useState("")
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Grabar audio y convertirlo a WAV usando Web Audio API
+  // Refs para poder detener/limpiar grabación
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const mediaStreamRef = useRef<MediaStream | null>(null)
+  const stopTimerRef = useRef<number | null>(null)
+
+  // ---- Grabación de voz y envío a /stt ----
   const handleVoiceRecording = async () => {
     if (!isRecording) {
-      setIsRecording(true)
-      setAssistantState("listening")
+      try {
+        setIsRecording(true)
+        setAssistantState("listening")
 
-      // Graba audio
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mediaRecorder = new MediaRecorder(stream)
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        mediaStreamRef.current = stream
 
-      let audioChunks: Blob[] = []
+        const mediaRecorder = new MediaRecorder(stream)
+        mediaRecorderRef.current = mediaRecorder
 
-      mediaRecorder.ondataavailable = (event) => {
-        audioChunks.push(event.data)
-      }
+        const audioChunks: Blob[] = []
 
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunks, { type: "audio/webm" })
-        const audioBuffer = await audioBlob.arrayBuffer()
-
-        // Convertimos a WAV
-        const wavBlob = await convertToWav(audioBuffer)
-
-        // Enviamos el archivo WAV al backend
-        const formData = new FormData()
-        formData.append("file", wavBlob, "audio.wav")
-
-        const response = await fetch("http://localhost:8000/stt", {
-          method: "POST",
-          body: formData,
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          // Actualizamos el input con la transcripción
-          setInput(data.transcript)
-        } else {
-          console.error("Error al transcribir el audio.")
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data && event.data.size > 0) audioChunks.push(event.data)
         }
 
-        // Resetear el estado después de la grabación
+        mediaRecorder.onerror = (e) => {
+          console.error("MediaRecorder error:", e)
+        }
+
+        mediaRecorder.onstop = async () => {
+          try {
+            // Blob de webm/opus
+            const audioBlob = new Blob(audioChunks, { type: "audio/webm" })
+
+            // Convertir a WAV mono PCM16 a 16 kHz
+            const wavBlob = await convertToWav(audioBlob)
+
+            // Enviar al backend
+            const formData = new FormData()
+            formData.append("file", wavBlob, "audio.wav")
+
+            const resp = await fetch("http://localhost:8000/stt", {
+              method: "POST",
+              body: formData,
+            })
+
+            if (!resp.ok) {
+              const ct = resp.headers.get("content-type") || ""
+              const errText = ct.includes("application/json")
+                ? JSON.stringify(await resp.json())
+                : await resp.text()
+              console.error("STT error:", errText)
+              throw new Error(errText || "Error al transcribir el audio")
+            }
+
+            const data = await resp.json()
+            setInput(data.transcript || "")
+          } catch (e) {
+            console.error("Grabación/STT falló:", e)
+          } finally {
+            // Liberar el micro
+            if (mediaStreamRef.current) {
+              mediaStreamRef.current.getTracks().forEach((t) => t.stop())
+              mediaStreamRef.current = null
+            }
+            mediaRecorderRef.current = null
+            if (stopTimerRef.current) {
+              window.clearTimeout(stopTimerRef.current)
+              stopTimerRef.current = null
+            }
+            setIsRecording(false)
+            setAssistantState("idle")
+          }
+        }
+
+        mediaRecorder.start()
+
+        // Detener automáticamente a los 5s (puedes ajustar)
+        stopTimerRef.current = window.setTimeout(() => {
+          if (mediaRecorder.state === "recording") mediaRecorder.stop()
+        }, 5000)
+      } catch (err) {
+        console.error("No se pudo iniciar la grabación:", err)
+        setIsRecording(false)
+        setAssistantState("idle")
+        // Limpiar por si quedó algo abierto
+        if (mediaStreamRef.current) {
+          mediaStreamRef.current.getTracks().forEach((t) => t.stop())
+          mediaStreamRef.current = null
+        }
+        mediaRecorderRef.current = null
+        if (stopTimerRef.current) {
+          window.clearTimeout(stopTimerRef.current)
+          stopTimerRef.current = null
+        }
+      }
+    } else {
+      // Si ya está grabando y el usuario vuelve a presionar, detenemos manualmente
+      try {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+          mediaRecorderRef.current.stop()
+        }
+      } finally {
+        if (stopTimerRef.current) {
+          window.clearTimeout(stopTimerRef.current)
+          stopTimerRef.current = null
+        }
         setIsRecording(false)
         setAssistantState("idle")
       }
-
-      mediaRecorder.start()
-
-      // Detenemos la grabación después de 5 segundos (puedes cambiar esto)
-      setTimeout(() => {
-        mediaRecorder.stop()
-      }, 5000)
-    } else {
-      setIsRecording(false)
-      setAssistantState("idle")
     }
   }
 
-  // Convertir el buffer de audio a WAV usando la Web Audio API
-  const convertToWav = async (audioBuffer: ArrayBuffer) => {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-    const buffer = await audioContext.decodeAudioData(audioBuffer)
+  // ---- Conversión: webm/opus -> WAV mono PCM16 @ 16kHz ----
+  const convertToWav = async (audioBlob: Blob): Promise<Blob> => {
+    const arrayBuffer = await audioBlob.arrayBuffer()
 
-    const wavData = encodeWAV(buffer)
+    // 1) Decodificar a AudioBuffer (float32)
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)()
+    const decoded: AudioBuffer = await ctx.decodeAudioData(arrayBuffer)
 
-    // Crear un Blob con los datos WAV y devolverlo
-    const wavBlob = new Blob([wavData], { type: "audio/wav" })
-    return wavBlob
+    // 2) Resample + downmix a mono y 16 kHz con OfflineAudioContext
+    const targetSampleRate = 16000
+    const lengthInSamples = Math.ceil(decoded.duration * targetSampleRate)
+    const offline = new OfflineAudioContext(1, lengthInSamples, targetSampleRate)
+    const src = offline.createBufferSource()
+    src.buffer = decoded // el destino es mono; el motor hace downmix
+    src.connect(offline.destination)
+    src.start(0)
+    const rendered: AudioBuffer = await offline.startRendering() // mono @ 16kHz
+
+    // 3) Empaquetar a WAV PCM16 little-endian
+    const channelData = rendered.getChannelData(0)
+    const wavBuffer = floatTo16BitWav(channelData, targetSampleRate)
+    return new Blob([wavBuffer], { type: "audio/wav" })
   }
 
-  // Función que convierte el buffer de audio a formato WAV
-  const encodeWAV = (buffer: AudioBuffer) => {
-    const numChannels = buffer.numberOfChannels
-    const sampleRate = buffer.sampleRate
-    const samples = buffer.length
+  // Empaqueta Float32 mono a WAV PCM16 LE
+  function floatTo16BitWav(float32: Float32Array, sampleRate: number): ArrayBuffer {
+    const numChannels = 1
+    const bytesPerSample = 2
+    const blockAlign = numChannels * bytesPerSample
+    const byteRate = sampleRate * blockAlign
+    const dataSize = float32.length * bytesPerSample
 
-    const bufferArray = new ArrayBuffer(44 + samples * 2 * numChannels) // 44 bytes para el encabezado WAV
-    const view = new DataView(bufferArray)
+    const buffer = new ArrayBuffer(44 + dataSize)
+    const view = new DataView(buffer)
 
-    // Escribir encabezado WAV
+    // RIFF/WAVE header
     writeString(view, 0, "RIFF")
-    view.setUint32(4, 36 + samples * 2 * numChannels, true)
+    view.setUint32(4, 36 + dataSize, true)
     writeString(view, 8, "WAVE")
+
+    // fmt  subchunk
     writeString(view, 12, "fmt ")
     view.setUint32(16, 16, true) // Subchunk1Size
-    view.setUint16(20, 1, true) // AudioFormat (PCM)
-    view.setUint16(22, numChannels, true)
-    view.setUint32(24, sampleRate, true)
-    view.setUint32(28, sampleRate * numChannels * 2, true) // ByteRate
-    view.setUint16(32, numChannels * 2, true) // BlockAlign
+    view.setUint16(20, 1, true) // AudioFormat = PCM
+    view.setUint16(22, numChannels, true) // NumChannels
+    view.setUint32(24, sampleRate, true) // SampleRate
+    view.setUint32(28, byteRate, true) // ByteRate
+    view.setUint16(32, blockAlign, true) // BlockAlign
     view.setUint16(34, 16, true) // BitsPerSample
-    writeString(view, 36, "data")
-    view.setUint32(40, samples * 2 * numChannels, true) // Subchunk2Size
 
-    // Escribir datos de audio
+    // data subchunk
+    writeString(view, 36, "data")
+    view.setUint32(40, dataSize, true)
+
+    // PCM 16-bit little endian
     let offset = 44
-    for (let channel = 0; channel < numChannels; channel++) {
-      const channelData = buffer.getChannelData(channel)
-      for (let i = 0; i < samples; i++) {
-        const sample = Math.max(-1, Math.min(1, channelData[i])) // Normalizar entre -1 y 1
-        view.setInt16(offset, sample * 0x7fff, true) // 16 bits PCM
-        offset += 2
-      }
+    for (let i = 0; i < float32.length; i++, offset += 2) {
+      let s = Math.max(-1, Math.min(1, float32[i]))
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true)
     }
 
-    return new Uint8Array(bufferArray)
+    return buffer
   }
 
-  // Función auxiliar para escribir cadenas en el ArrayBuffer
-  const writeString = (view: DataView, offset: number, str: string) => {
+  function writeString(view: DataView, offset: number, str: string) {
     for (let i = 0; i < str.length; i++) {
       view.setUint8(offset + i, str.charCodeAt(i))
     }
   }
 
-  // Handle camera/facial recognition
+  // ---- Cámara / reconocimiento facial (placeholder) ----
   const handleCamera = () => {
     setAssistantState("thinking")
-
-    // Simulate facial recognition processing
     setTimeout(() => {
       const userMessage: Message = {
         id: Date.now().toString(),
@@ -153,13 +219,11 @@ export default function MariantoniettaAssistant() {
         timestamp: new Date(),
       }
       setMessages((prev) => [...prev, userMessage])
-
-      // Simulate assistant response
       simulateAssistantResponse("Hello! I recognize you. How can I help you today?")
     }, 1500)
   }
 
-  // Simulate typing animation for assistant response
+  // ---- Simulación de escritura de la respuesta ----
   const simulateAssistantResponse = (response: string) => {
     setAssistantState("thinking")
     setCurrentResponse("")
@@ -173,8 +237,6 @@ export default function MariantoniettaAssistant() {
           index++
         } else {
           clearInterval(typingInterval)
-
-          // Add complete message to history
           const assistantMessage: Message = {
             id: Date.now().toString(),
             role: "assistant",
@@ -189,7 +251,7 @@ export default function MariantoniettaAssistant() {
     }, 1000)
   }
 
-  // Handle sending message to LLM API
+  // ---- Envío de texto a /ask ----
   const handleSend = async () => {
     if (!input.trim()) return
 
@@ -201,35 +263,28 @@ export default function MariantoniettaAssistant() {
     }
 
     setMessages((prev) => [...prev, userMessage])
-    setInput("") // Clear input field
-
-    // Simulate assistant thinking (optional animation or delay)
+    setInput("")
     setAssistantState("thinking")
     setCurrentResponse("")
 
     try {
-      // Send request to /ask to get the assistant's response
       const response = await fetch("http://localhost:8000/ask", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          query: input,
-        }),
+        body: JSON.stringify({ query: input }),
       })
 
       if (!response.ok) {
-        throw new Error("Error en la comunicación con el backend")
+        const errText = await response.text()
+        throw new Error(errText || "Error en la comunicación con el backend")
       }
 
       const data = await response.json()
-
-      // Get response from LLM and simulate assistant speaking
       setAssistantState("speaking")
       setCurrentResponse(data.respuesta)
 
-      // After response is received, add assistant message to chat
       const assistantMessage: Message = {
         id: Date.now().toString(),
         role: "assistant",
@@ -237,17 +292,16 @@ export default function MariantoniettaAssistant() {
         timestamp: new Date(),
       }
 
-      // Add assistant message to messages array
       setMessages((prev) => [...prev, assistantMessage])
-      setCurrentResponse("") // Clear current response
-      setAssistantState("idle") // Set state to idle after processing
+      setCurrentResponse("")
+      setAssistantState("idle")
     } catch (error) {
       console.error("Error:", error)
       setAssistantState("idle")
     }
   }
 
-  // Handle Enter key press for sending message
+  // Enter para enviar
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault()
@@ -305,6 +359,7 @@ export default function MariantoniettaAssistant() {
                     ? "bg-accent hover:bg-accent/90 animate-pulse-glow"
                     : "border-primary/20 hover:border-primary hover:bg-primary/10"
                 }`}
+                title={isRecording ? "Stop recording" : "Start recording"}
               >
                 {isRecording ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
               </Button>

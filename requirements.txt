@@ -23,5 +23,7 @@ python-multipart
 sounddevice
 httpx
 opencv-contrib-python-headless
-sklearn
 jupyter
+catboost
+azure-cognitiveservices-vision-face
+msrest
