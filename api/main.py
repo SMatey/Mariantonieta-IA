@@ -50,11 +50,11 @@ except ImportError as e:
 try:
     from api.routes import face_routes
     from face_recognition.azure_face_service import face_client 
-    from face_recognition.fer_service import detector as fer_detector
+    from face_recognition.deepface_service import DEEPFACE_LOADED
     
     FACE_AVAILABLE = True
 except Exception as e:
-    print(f"Face API: {e}. (Revisa dependencias de FER/TensorFlow/Azure)")
+    print(f"Face API no disponible: {e}.")
     FACE_AVAILABLE = False
 
 try:
@@ -236,15 +236,15 @@ def health_check():
         try:
             if not (face_client and face_client.endpoint):
                 raise Exception("Azure FaceClient no inicializado.")
-        
-            if fer_detector is None:
-                raise Exception("Detector FER (local) no inicializado.")
+            
+            if not DEEPFACE_LOADED:
+                raise Exception("Detector DeepFace (local) no inicializado.")
                 
             services_status["face"] = {
                "status": "healthy",
-               "description": "Híbrido: Detección Azure + Emoción FER",
+               "description": "Híbrido: Detección Azure + Emoción DeepFace",
                "azure_endpoint": face_client.endpoint,
-               "fer_model_status": "loaded"
+               "deepface_model_status": "loaded"
             }
         except Exception as e:
             services_status["face"] = {
@@ -332,9 +332,9 @@ def list_models():
     if FACE_AVAILABLE:
         models.append({
             "name": "face_emotion",
-            "description": "Detección de rostro (Azure) + Emoción (FER Local)",
+            "description": "Detección de rostro (Azure) + Emoción (DeepFace Local)",
             "endpoint": "/face/analyze-emotion",
-            "type": "Híbrido (Azure + FER)",
+            "type": "Híbrido (Azure + DeepFace)",
             "status": "active"
         })
     
@@ -355,7 +355,7 @@ if __name__ == "__main__":
     if AVOCADO_AVAILABLE:
         print("   • Avocado Price Prediction (CatBoost)")
     if FACE_AVAILABLE:
-        print("   • Face Recognition (Azure + FER)")
+        print("   • Face Recognition (Azure + DeepFace)")
 
     print("Documentación disponible en: http://localhost:8000/docs")
     

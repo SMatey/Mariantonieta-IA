@@ -26,5 +26,5 @@ opencv-contrib-python-headless
 jupyter
 catboost
 azure-cognitiveservices-vision-face
-mtcnn
-fer
+deepface
+tf-keras
