@@ -1,56 +1,42 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
-import io
-
-# Importamos AMBOS servicios
+# face_routes.py (agrega este endpoint)
+from fastapi import APIRouter, File, UploadFile, HTTPException
+from io import BytesIO
 from face_recognition.azure_face_service import detect_face_with_azure
-from face_recognition.deepface_service import analyze_emotion_with_deepface
+from face_recognition.google_vision_service import detect_faces_with_google
+from face_recognition.fusion_service import fuse_azure_google
 
-router = APIRouter(
-    prefix="/face",
-    tags=["Face Recognition & Emotion"]
-)
+router = APIRouter(prefix="/face", tags=["face"])
 
-@router.post("/analyze-emotion")
-async def handle_analyze_emotion(image: UploadFile = File(...)):
-    """
-    Endpoint híbrido:
-    1. Detecta rostro con Azure (Requisito)
-    2. Detecta emoción con DeepFace (Local)
-    """
-    
-    if not image.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="El archivo no es una imagen.")
-
+@router.post("/analyze-azure-google")
+async def analyze_azure_google(file: UploadFile = File(...)):
     try:
-        # Leemos la imagen UNA SOLA VEZ en memoria
-        image_data = await image.read()
-        
-        # Creamos dos "copias" del stream en memoria para que
-        # cada servicio pueda leerlo de forma independiente.
-        azure_stream = io.BytesIO(image_data)
-        local_stream = io.BytesIO(image_data)
-        
-        # 1. Llamar a Azure para la detección de rostro (cumple requisito)
-        azure_results = detect_face_with_azure(azure_stream)
-        
-        # 2. Llamar a DeepFace para el análisis de emoción
-        local_results = analyze_emotion_with_deepface(local_stream)
-        
-        
-        if "error" in azure_results:
-             raise HTTPException(status_code=500, detail=f"Error Azure: {azure_results['error']}")
-        
-        if "error" in local_results:
-             raise HTTPException(status_code=500, detail=f"Error DeepFace: {local_results['error']}")
+        name = file.filename.lower()
+        if not name.endswith((".jpg", ".jpeg", ".png")):
+            raise HTTPException(status_code=400, detail="Formato no soportado (usa .jpg/.jpeg/.png)")
+        buf = BytesIO(await file.read())
 
-        if not azure_results and not local_results:
-            return {"message": "No se detectaron rostros por ningún método."}
+        # 1) Detección con Azure
+        az = detect_face_with_azure(BytesIO(buf.getvalue()))
+        if isinstance(az, dict) and "error" in az:
+            raise HTTPException(status_code=502, detail=az["error"])
 
-        # Devolvemos los resultados de ambos análisis
+        # 2) Emociones con Google (sobre la misma imagen)
+        gv = detect_faces_with_google(BytesIO(buf.getvalue()))
+        if len(gv) and isinstance(gv[0], dict) and "error" in gv[0]:
+            raise HTTPException(status_code=502, detail=gv[0]["error"])
+
+        # 3) Fusión por IoU
+        fused = fuse_azure_google(az, gv, iou_threshold=0.2)
+
         return {
-            "azure_face_detection": azure_results,
-            "local_emotion_analysis": local_results
+            "faces": fused,
+            "meta": {
+                "azure_faces": len(az or []),
+                "google_faces": len(gv or []),
+                "notes": "Rostros detectados por Azure; emociones estimadas por Google Vision; emparejados por IoU>=0.2"
+            }
         }
-
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error interno (Azure+Google): {e}")

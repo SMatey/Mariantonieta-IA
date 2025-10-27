@@ -50,8 +50,6 @@ except ImportError as e:
 try:
     from api.routes import face_routes
     from face_recognition.azure_face_service import face_client 
-    from face_recognition.deepface_service import DEEPFACE_LOADED
-    
     FACE_AVAILABLE = True
 except Exception as e:
     print(f"Face API no disponible: {e}.")
@@ -234,17 +232,17 @@ def health_check():
 
     if FACE_AVAILABLE:
         try:
+            # Check Azure
             if not (face_client and face_client.endpoint):
                 raise Exception("Azure FaceClient no inicializado.")
             
-            if not DEEPFACE_LOADED:
-                raise Exception("Detector DeepFace (local) no inicializado.")
+            # (No podemos chequear Google Vision fácilmente sin credenciales,
+            # así que confiamos en que la importación fue exitosa)
                 
             services_status["face"] = {
                "status": "healthy",
-               "description": "Híbrido: Detección Azure + Emoción DeepFace",
-               "azure_endpoint": face_client.endpoint,
-               "deepface_model_status": "loaded"
+               "description": "Híbrido: Detección Azure + Emoción Google Vision",
+               "azure_endpoint": face_client.endpoint
             }
         except Exception as e:
             services_status["face"] = {
@@ -332,9 +330,9 @@ def list_models():
     if FACE_AVAILABLE:
         models.append({
             "name": "face_emotion",
-            "description": "Detección de rostro (Azure) + Emoción (DeepFace Local)",
-            "endpoint": "/face/analyze-emotion",
-            "type": "Híbrido (Azure + DeepFace)",
+            "description": "Detección (Azure) + Emoción (Google Vision)",
+            "endpoint": "/face/analyze-azure-google", # <-- Coincide con face_routes.py
+            "type": "Híbrido (Azure + Google Cloud Vision)",
             "status": "active"
         })
     
@@ -355,7 +353,7 @@ if __name__ == "__main__":
     if AVOCADO_AVAILABLE:
         print("   • Avocado Price Prediction (CatBoost)")
     if FACE_AVAILABLE:
-        print("   • Face Recognition (Azure + DeepFace)")
+        print("   • Face Recognition (Azure + Google Vision)")
 
     print("Documentación disponible en: http://localhost:8000/docs")
     
