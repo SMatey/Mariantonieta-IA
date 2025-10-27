@@ -47,6 +47,16 @@ except ImportError as e:
     print(f"⚠️  Avocado API no disponible: {e}")
     AVOCADO_AVAILABLE = False
 
+try:
+    from api.routes import face_routes
+    from face_recognition.azure_face_service import face_client 
+    from face_recognition.fer_service import detector as fer_detector
+    
+    FACE_AVAILABLE = True
+except Exception as e:
+    print(f"Face API: {e}. (Revisa dependencias de FER/TensorFlow/Azure)")
+    FACE_AVAILABLE = False
+
 app = FastAPI(
     title="AI Models API Hub",
     description="API centralizada para múltiples modelos de Machine Learning",
@@ -78,6 +88,9 @@ if ACV_AVAILABLE:
 if AVOCADO_AVAILABLE:
     app.mount("/avocado", avocado_app)
 
+if FACE_AVAILABLE:
+    app.include_router(face_routes.router)
+
 @app.get("/", response_model=HealthResponse)
 def root():
     """Endpoint principal con información de la API"""
@@ -92,6 +105,8 @@ def root():
         available_models.append("acv")
     if AVOCADO_AVAILABLE:
         available_models.append("avocado")
+    if FACE_AVAILABLE:
+        available_models.append("face")
     
     return HealthResponse(
         status="active",
@@ -206,6 +221,26 @@ def health_check():
                 "status": "unhealthy",
                 "error": str(e)
             }
+
+    if FACE_AVAILABLE:
+        try:
+            if not (face_client and face_client.endpoint):
+                raise Exception("Azure FaceClient no inicializado.")
+        
+            if fer_detector is None:
+                raise Exception("Detector FER (local) no inicializado.")
+                
+            services_status["face"] = {
+               "status": "healthy",
+               "description": "Híbrido: Detección Azure + Emoción FER",
+               "azure_endpoint": face_client.endpoint,
+               "fer_model_status": "loaded"
+            }
+        except Exception as e:
+            services_status["face"] = {
+                "status": "unhealthy",
+                "error": str(e)
+            }
     
     overall_status = "healthy" if all(
         service["status"] == "healthy" 
@@ -220,7 +255,7 @@ def health_check():
         "flights_available": FLIGHTS_AVAILABLE,
         "acv_available": ACV_AVAILABLE,
         "avocado_available": AVOCADO_AVAILABLE,
-        "avocado_available": AVOCADO_AVAILABLE
+        "face_available": FACE_AVAILABLE
     }
 
 @app.get("/models")
@@ -284,12 +319,12 @@ def list_models():
             "status": "active"
         })
     
-    if AVOCADO_AVAILABLE:
+    if FACE_AVAILABLE:
         models.append({
-            "name": "avocado",
-            "description": "Predicción de precios de aguacate usando CatBoost",
-            "endpoint": "/avocado/predict",
-            "type": "CatBoost Regressor",
+            "name": "face_emotion",
+            "description": "Detección de rostro (Azure) + Emoción (FER Local)",
+            "endpoint": "/face/analyze-emotion",
+            "type": "Híbrido (Azure + FER)",
             "status": "active"
         })
     
@@ -309,8 +344,9 @@ if __name__ == "__main__":
         print("   • ACV Risk Prediction (Decision Tree)")
     if AVOCADO_AVAILABLE:
         print("   • Avocado Price Prediction (CatBoost)")
-    if AVOCADO_AVAILABLE:
-        print("   • Avocado Price Prediction (CatBoost)")
+    if FACE_AVAILABLE:
+        print("   • Face Recognition (Azure + FER)")
+
     print("Documentación disponible en: http://localhost:8000/docs")
     
     uvicorn.run(
