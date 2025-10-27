@@ -61,6 +61,21 @@ except ImportError as e:
     logger.warning(f"Avocado API no disponible: {e}")
     AVOCADO_AVAILABLE = False
 
+try:
+    from api.routes import face_routes
+    from face_recognition.azure_face_service import face_client 
+    FACE_AVAILABLE = True
+except Exception as e:
+    print(f"Face API no disponible: {e}.")
+    FACE_AVAILABLE = False
+
+try:
+    from .stt import router as stt_router
+    STT_AVAILABLE = True
+except ImportError as e:
+    print(f"⚠️  STT Router no disponible: {e}")
+    STT_AVAILABLE = False
+
 app = FastAPI(
     title="AI Models API Hub",
     description="API centralizada para múltiples modelos de Machine Learning",
@@ -92,6 +107,12 @@ if ACV_AVAILABLE:
 if AVOCADO_AVAILABLE:
     app.mount("/avocado", avocado_app)
 
+if FACE_AVAILABLE:
+    app.include_router(face_routes.router)
+
+if STT_AVAILABLE:
+    app.include_router(stt_router)
+
 @app.get("/", response_model=HealthResponse)
 def root():
     """Endpoint principal con información de la API"""
@@ -106,6 +127,8 @@ def root():
         available_models.append("acv")
     if AVOCADO_AVAILABLE:
         available_models.append("avocado")
+    if FACE_AVAILABLE:
+        available_models.append("face")
     
     return HealthResponse(
         status="active",
@@ -244,6 +267,26 @@ def health_check():
                 "error": str(e)
             }
             logger.error(f"Avocado API: unhealthy - {str(e)}")
+
+    if FACE_AVAILABLE:
+        try:
+            # Check Azure
+            if not (face_client and face_client.endpoint):
+                raise Exception("Azure FaceClient no inicializado.")
+            
+            # (No podemos chequear Google Vision fácilmente sin credenciales,
+            # así que confiamos en que la importación fue exitosa)
+                
+            services_status["face"] = {
+               "status": "healthy",
+               "description": "Híbrido: Detección Azure + Emoción Google Vision",
+               "azure_endpoint": face_client.endpoint
+            }
+        except Exception as e:
+            services_status["face"] = {
+                "status": "unhealthy",
+                "error": str(e)
+            }
     
     overall_status = "healthy" if all(
         service["status"] == "healthy" 
@@ -260,7 +303,7 @@ def health_check():
         "flights_available": FLIGHTS_AVAILABLE,
         "acv_available": ACV_AVAILABLE,
         "avocado_available": AVOCADO_AVAILABLE,
-        "avocado_available": AVOCADO_AVAILABLE
+        "face_available": FACE_AVAILABLE
     }
 
 @app.get("/models")
@@ -324,12 +367,12 @@ def list_models():
             "status": "active"
         })
     
-    if AVOCADO_AVAILABLE:
+    if FACE_AVAILABLE:
         models.append({
-            "name": "avocado",
-            "description": "Predicción de precios de aguacate usando CatBoost",
-            "endpoint": "/avocado/predict",
-            "type": "CatBoost Regressor",
+            "name": "face_emotion",
+            "description": "Detección (Azure) + Emoción (Google Vision)",
+            "endpoint": "/face/analyze-azure-google", # <-- Coincide con face_routes.py
+            "type": "Híbrido (Azure + Google Cloud Vision)",
             "status": "active"
         })
     
@@ -349,6 +392,10 @@ if __name__ == "__main__":
         logger.info("ACV Risk Prediction (Decision Tree)")
     if AVOCADO_AVAILABLE:
         logger.info("Avocado Price Prediction (CatBoost)")
+    logger.info("Documentación disponible en: http://localhost:8000/docs")
+    if FACE_AVAILABLE:
+        logger.info("Face Recognition (Azure + Google Vision)")
+
     logger.info("Documentación disponible en: http://localhost:8000/docs")
 
     uvicorn.run(
