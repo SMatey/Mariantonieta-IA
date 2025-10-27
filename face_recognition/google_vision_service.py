@@ -3,7 +3,6 @@ import io
 from typing import List, Dict, Any
 from google.cloud import vision
 
-# (Variables LIKELIHOOD omitidas por brevedad)
 LIKELIHOOD_TO_TEXT = {
     vision.Likelihood.UNKNOWN: "UNKNOWN",
     vision.Likelihood.VERY_UNLIKELY: "VERY_UNLIKELY",
@@ -29,9 +28,8 @@ def _poly_to_bbox(poly) -> Dict[str, int]:
     return {"left": x1, "top": y1, "width": x2 - x1, "height": y2 - y1}
 
 def detect_faces_with_google(image_stream: io.BytesIO) -> List[Dict[str, Any]]:
-    # --- LA LÍNEA MÁGICA ---
-    image_stream.seek(0) # Rebobinamos el stream de Google
-    # --- FIN ---
+    image_stream.seek(0) 
+
     
     client = vision.ImageAnnotatorClient()
     content = image_stream.read()

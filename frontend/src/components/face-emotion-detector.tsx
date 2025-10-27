@@ -5,22 +5,32 @@ import { Button } from "./ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card"
 import { Camera, X, Loader2 } from "lucide-react"
 
-type EmotionResult = {
-  main_emotion: string
-  score: number
+type FaceResult = {
+  detection_source: string
   position: {
     left: number
     top: number
     width: number
     height: number
   }
+  likelihoods: {
+    joy: string
+    sorrow: string
+    anger: string
+    surprise: string
+  }
+  best_emotion: {
+    label: string
+    score: number
+  }
 }
 
-type EmotionAnalysis = {
-  success: boolean
-  faces_detected: number
-  results: EmotionResult[]
-  message?: string
+type GoogleVisionResponse = {
+  faces: FaceResult[]
+  meta: {
+    source: string
+    notes: string
+  }
 }
 
 interface FaceEmotionDetectorProps {
@@ -31,14 +41,13 @@ interface FaceEmotionDetectorProps {
 export default function FaceEmotionDetector({ onClose, onEmotionDetected }: FaceEmotionDetectorProps) {
   const [isStreaming, setIsStreaming] = useState(false)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [emotionData, setEmotionData] = useState<EmotionAnalysis | null>(null)
+  const [emotionData, setEmotionData] = useState<GoogleVisionResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
 
-  // Iniciar la cámara
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -57,7 +66,6 @@ export default function FaceEmotionDetector({ onClose, onEmotionDetected }: Face
     }
   }
 
-  // Detener la cámara
   const stopCamera = () => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop())
@@ -66,7 +74,6 @@ export default function FaceEmotionDetector({ onClose, onEmotionDetected }: Face
     setIsStreaming(false)
   }
 
-  // Capturar foto y analizar emoción
   const captureAndAnalyze = async () => {
     if (!videoRef.current || !canvasRef.current) return
 
@@ -80,14 +87,11 @@ export default function FaceEmotionDetector({ onClose, onEmotionDetected }: Face
 
       if (!context) return
 
-      // Configurar el canvas con las dimensiones del video
       canvas.width = video.videoWidth
       canvas.height = video.videoHeight
 
-      // Dibujar el frame actual del video en el canvas
       context.drawImage(video, 0, 0, canvas.width, canvas.height)
 
-      // Convertir el canvas a blob
       const blob = await new Promise<Blob>((resolve) => {
         canvas.toBlob(
           (blob) => {
@@ -98,11 +102,10 @@ export default function FaceEmotionDetector({ onClose, onEmotionDetected }: Face
         )
       })
 
-      // Enviar la imagen al backend
       const formData = new FormData()
       formData.append("file", blob, "capture.jpg")
 
-      const response = await fetch("http://localhost:8000/face/analyze-emotion", {
+      const response = await fetch("http://localhost:8000/face/analyze", {
         method: "POST",
         body: formData,
       })
@@ -111,12 +114,11 @@ export default function FaceEmotionDetector({ onClose, onEmotionDetected }: Face
         throw new Error("Error al analizar la imagen")
       }
 
-      const data: EmotionAnalysis = await response.json()
+      const data: GoogleVisionResponse = await response.json()
       setEmotionData(data)
 
-      // Notificar la emoción detectada
-      if (data.success && data.results.length > 0 && onEmotionDetected) {
-        onEmotionDetected(data.results[0].main_emotion)
+      if (data.faces.length > 0 && onEmotionDetected) {
+        onEmotionDetected(data.faces[0].best_emotion.label)
       }
     } catch (err) {
       setError("Error al analizar la emoción. Por favor, intenta de nuevo.")
@@ -126,26 +128,37 @@ export default function FaceEmotionDetector({ onClose, onEmotionDetected }: Face
     }
   }
 
-  // Limpiar al desmontar
   useEffect(() => {
     return () => {
       stopCamera()
     }
   }, [])
 
-  // Mapeo de emociones a emojis
   const getEmotionEmoji = (emotion: string) => {
     const emojiMap: Record<string, string> = {
-      happiness: "😊",
-      sadness: "😢",
+      joy: "😊",
+      sorrow: "😢",
       anger: "😠",
       surprise: "😲",
+      neutral: "😐",
+      happiness: "😊",
+      sadness: "😢",
       fear: "😨",
       disgust: "🤢",
       contempt: "😒",
-      neutral: "😐",
     }
     return emojiMap[emotion.toLowerCase()] || "😐"
+  }
+
+  const translateEmotion = (emotion: string) => {
+    const translations: Record<string, string> = {
+      joy: "Alegría",
+      sorrow: "Tristeza",
+      anger: "Enojo",
+      surprise: "Sorpresa",
+      neutral: "Neutral",
+    }
+    return translations[emotion.toLowerCase()] || emotion
   }
 
   return (
@@ -165,7 +178,6 @@ export default function FaceEmotionDetector({ onClose, onEmotionDetected }: Face
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Video Preview */}
         <div className="relative bg-secondary rounded-lg overflow-hidden aspect-video">
           <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
           <canvas ref={canvasRef} className="hidden" />
@@ -180,39 +192,57 @@ export default function FaceEmotionDetector({ onClose, onEmotionDetected }: Face
           )}
         </div>
 
-        {/* Error Message */}
         {error && (
           <div className="p-4 bg-destructive/10 border border-destructive rounded-lg">
             <p className="text-sm text-destructive">{error}</p>
           </div>
         )}
 
-        {/* Emotion Results */}
-        {emotionData && emotionData.success && (
+        {emotionData && emotionData.faces.length > 0 && (
           <div className="p-4 bg-primary/10 border border-primary rounded-lg space-y-2">
             <h3 className="font-semibold text-foreground">
-              {emotionData.faces_detected}{" "}
-              {emotionData.faces_detected === 1 ? "rostro detectado" : "rostros detectados"}
+              {emotionData.faces.length} {emotionData.faces.length === 1 ? "rostro detectado" : "rostros detectados"}
             </h3>
-            {emotionData.results.map((result, index) => (
-              <div key={index} className="flex items-center gap-3 p-3 bg-card rounded-md">
-                <span className="text-4xl">{getEmotionEmoji(result.main_emotion)}</span>
-                <div className="flex-1">
-                  <p className="font-medium capitalize">{result.main_emotion}</p>
-                  <p className="text-sm text-muted-foreground">Confianza: {(result.score * 100).toFixed(1)}%</p>
+            {emotionData.faces.map((face, index) => (
+              <div key={index} className="space-y-2">
+                <div className="flex items-center gap-3 p-3 bg-card rounded-md">
+                  <span className="text-4xl">{getEmotionEmoji(face.best_emotion.label)}</span>
+                  <div className="flex-1">
+                    <p className="font-medium">{translateEmotion(face.best_emotion.label)}</p>
+                    <p className="text-sm text-muted-foreground">
+                      Confianza: {(face.best_emotion.score * 100).toFixed(1)}%
+                    </p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2 bg-card rounded">
+                    <span className="text-muted-foreground">Alegría:</span>{" "}
+                    <span className="font-medium">{face.likelihoods.joy}</span>
+                  </div>
+                  <div className="p-2 bg-card rounded">
+                    <span className="text-muted-foreground">Tristeza:</span>{" "}
+                    <span className="font-medium">{face.likelihoods.sorrow}</span>
+                  </div>
+                  <div className="p-2 bg-card rounded">
+                    <span className="text-muted-foreground">Enojo:</span>{" "}
+                    <span className="font-medium">{face.likelihoods.anger}</span>
+                  </div>
+                  <div className="p-2 bg-card rounded">
+                    <span className="text-muted-foreground">Sorpresa:</span>{" "}
+                    <span className="font-medium">{face.likelihoods.surprise}</span>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        {emotionData && !emotionData.success && (
+        {emotionData && emotionData.faces.length === 0 && (
           <div className="p-4 bg-muted rounded-lg">
-            <p className="text-sm text-muted-foreground">{emotionData.message}</p>
+            <p className="text-sm text-muted-foreground">No se detectaron rostros en la imagen. Intenta de nuevo.</p>
           </div>
         )}
 
-        {/* Controls */}
         <div className="flex gap-2">
           {!isStreaming ? (
             <Button onClick={startCamera} className="flex-1">

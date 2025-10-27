@@ -63,10 +63,11 @@ except ImportError as e:
 
 try:
     from api.routes import face_routes
-    from face_recognition.azure_face_service import face_client 
+    from google.cloud import vision 
     FACE_AVAILABLE = True
+    logger.info("Face Recognition importada exitosamente")
 except Exception as e:
-    print(f"Face API no disponible: {e}.")
+    logger.warning(f"Face API (Google Vision) no disponible: {e}.")
     FACE_AVAILABLE = False
 
 try:
@@ -270,17 +271,9 @@ def health_check():
 
     if FACE_AVAILABLE:
         try:
-            # Check Azure
-            if not (face_client and face_client.endpoint):
-                raise Exception("Azure FaceClient no inicializado.")
-            
-            # (No podemos chequear Google Vision fácilmente sin credenciales,
-            # así que confiamos en que la importación fue exitosa)
-                
             services_status["face"] = {
                "status": "healthy",
-               "description": "Híbrido: Detección Azure + Emoción Google Vision",
-               "azure_endpoint": face_client.endpoint
+               "description": "Google Cloud Vision API"
             }
         except Exception as e:
             services_status["face"] = {
@@ -370,9 +363,9 @@ def list_models():
     if FACE_AVAILABLE:
         models.append({
             "name": "face_emotion",
-            "description": "Detección (Azure) + Emoción (Google Vision)",
-            "endpoint": "/face/analyze-azure-google", # <-- Coincide con face_routes.py
-            "type": "Híbrido (Azure + Google Cloud Vision)",
+            "description": "Detección de rostro y emoción con Google Vision",
+            "endpoint": "/face/analyze", 
+            "type": "Google Cloud Vision",
             "status": "active"
         })
     
@@ -394,7 +387,7 @@ if __name__ == "__main__":
         logger.info("Avocado Price Prediction (CatBoost)")
     logger.info("Documentación disponible en: http://localhost:8000/docs")
     if FACE_AVAILABLE:
-        logger.info("Face Recognition (Azure + Google Vision)")
+        logger.info("Face Recognition (Google Vision)")
 
     logger.info("Documentación disponible en: http://localhost:8000/docs")
 

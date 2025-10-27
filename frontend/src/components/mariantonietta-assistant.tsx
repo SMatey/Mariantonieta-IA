@@ -8,6 +8,7 @@ import { Card } from "./ui/card"
 import { Mic, ScanFace, Send, MicOff } from "lucide-react"
 import AssistantCharacter from "./assistant-character"
 import MessageList from "./message-list"
+import FaceEmotionDetector from "./face-emotion-detector"
 
 type Message = {
   id: string
@@ -24,6 +25,7 @@ export default function MariantoniettaAssistant() {
   const [assistantState, setAssistantState] = useState<AssistantState>("idle")
   const [isRecording, setIsRecording] = useState(false)
   const [currentResponse, setCurrentResponse] = useState("")
+  const [showFaceDetector, setShowFaceDetector] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Refs para poder detener/limpiar grabación
@@ -210,17 +212,29 @@ export default function MariantoniettaAssistant() {
 
   // ---- Cámara / reconocimiento facial (placeholder) ----
   const handleCamera = () => {
-    setAssistantState("thinking")
-    setTimeout(() => {
-      const userMessage: Message = {
-        id: Date.now().toString(),
-        role: "user",
-        content: "[Facial Recognition Activated]",
-        timestamp: new Date(),
-      }
-      setMessages((prev) => [...prev, userMessage])
-      simulateAssistantResponse("Hello! I recognize you. How can I help you today?")
-    }, 1500)
+    setShowFaceDetector(true)
+  }
+
+  const handleEmotionDetected = (emotion: string) => {
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: `[Emoción detectada: ${emotion}]`,
+      timestamp: new Date(),
+    }
+    setMessages((prev) => [...prev, userMessage])
+
+    const emotionResponses: Record<string, string> = {
+      happiness: "¡Me alegra verte feliz! ¿En qué puedo ayudarte hoy?",
+      sadness: "Veo que estás un poco triste. Estoy aquí para ayudarte. ¿Quieres hablar de algo?",
+      anger: "Noto que estás molesto. ¿Hay algo en lo que pueda ayudarte?",
+      surprise: "¡Vaya! Pareces sorprendido. ¿Qué puedo hacer por ti?",
+      fear: "Pareces preocupado. Estoy aquí para ayudarte. ¿Qué necesitas?",
+      neutral: "Hola, ¿en qué puedo ayudarte hoy?",
+    }
+
+    const response = emotionResponses[emotion.toLowerCase()] || "Te reconozco. ¿Cómo puedo ayudarte?"
+    simulateAssistantResponse(response)
   }
 
   // ---- Simulación de escritura de la respuesta ----
@@ -311,7 +325,6 @@ export default function MariantoniettaAssistant() {
 
   return (
     <div className="flex flex-col h-screen bg-background">
-      {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4">
           <h1 className="text-2xl font-bold text-foreground">Mariantonieta</h1>
@@ -319,24 +332,27 @@ export default function MariantoniettaAssistant() {
         </div>
       </header>
 
-      {/* Main Content */}
       <div className="flex-1 container mx-auto px-4 py-6 flex flex-col lg:flex-row gap-6 overflow-hidden">
-        {/* Character Section */}
         <div className="lg:w-1/3 flex items-center justify-center">
           <AssistantCharacter state={assistantState} />
         </div>
 
-        {/* Chat Section */}
         <div className="lg:w-2/3 flex flex-col gap-4 min-h-0">
-          {/* Messages */}
+          {showFaceDetector && (
+            <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <FaceEmotionDetector
+                onClose={() => setShowFaceDetector(false)}
+                onEmotionDetected={handleEmotionDetected}
+              />
+            </div>
+          )}
+
           <Card className="flex-1 p-4 overflow-hidden flex flex-col bg-card/50 backdrop-blur-sm">
             <MessageList messages={messages} currentResponse={currentResponse} assistantState={assistantState} />
           </Card>
 
-          {/* Input Area */}
           <Card className="p-4 bg-card/50 backdrop-blur-sm">
             <div className="flex gap-2 items-end">
-              {/* Camera Button */}
               <Button
                 size="icon"
                 variant="outline"
@@ -348,7 +364,6 @@ export default function MariantoniettaAssistant() {
                 <ScanFace className="h-5 w-5" />
               </Button>
 
-              {/* Voice Button */}
               <Button
                 size="icon"
                 variant={isRecording ? "default" : "outline"}
@@ -359,12 +374,10 @@ export default function MariantoniettaAssistant() {
                     ? "bg-accent hover:bg-accent/90 animate-pulse-glow"
                     : "border-primary/20 hover:border-primary hover:bg-primary/10"
                 }`}
-                title={isRecording ? "Stop recording" : "Start recording"}
               >
                 {isRecording ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
               </Button>
 
-              {/* Text Input */}
               <div className="flex-1 flex gap-2">
                 <Input
                   ref={inputRef}
@@ -386,7 +399,6 @@ export default function MariantoniettaAssistant() {
               </div>
             </div>
 
-            {/* Status Indicator */}
             {assistantState !== "idle" && (
               <div className="mt-3 text-sm text-muted-foreground flex items-center gap-2">
                 <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
