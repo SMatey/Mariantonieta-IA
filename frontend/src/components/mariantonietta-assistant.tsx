@@ -68,7 +68,7 @@ export default function MariantoniettaAssistant() {
             const formData = new FormData()
             formData.append("file", wavBlob, "audio.wav")
 
-            const resp = await fetch("http://localhost:8000/stt", {
+            const resp = await fetch("http://localhost:8000/stt/", {
               method: "POST",
               body: formData,
             })
