@@ -23,6 +23,22 @@ type FaceResult = {
     label: string
     score: number
   }
+  // ¡NUEVOS CAMPOS PARA LAS PROBABILIDADES DETALLADAS!
+  detailed_probabilities?: {
+    angry: number
+    disgust: number
+    fear: number
+    happy: number
+    neutral: number
+    sad: number
+    surprise: number
+  }
+  raw_prediction?: string
+  model_info?: {
+    architecture: string
+    confidence: number
+    total_classes: number
+  }
 }
 
 type GoogleVisionResponse = {
@@ -30,6 +46,8 @@ type GoogleVisionResponse = {
   meta: {
     source: string
     notes: string
+    saved_image?: string
+    timestamp?: string
   }
 }
 
@@ -47,6 +65,68 @@ export default function FaceEmotionDetector({ onClose, onEmotionDetected }: Face
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+
+  // Componente para mostrar las probabilidades detalladas
+  const DetailedProbabilities = ({ probabilities }: { probabilities: FaceResult['detailed_probabilities'] }) => {
+    if (!probabilities) return null;
+
+    // Ordenar emociones por probabilidad (mayor a menor)
+    const sortedEmotions = Object.entries(probabilities)
+      .sort(([, a], [, b]) => b - a);
+
+    const getEmotionLabel = (emotion: string) => {
+      const labels: Record<string, string> = {
+        angry: "Enojo",
+        disgust: "Asco", 
+        fear: "Miedo",
+        happy: "Felicidad",
+        neutral: "Neutral",
+        sad: "Tristeza",
+        surprise: "Sorpresa"
+      }
+      return labels[emotion] || emotion;
+    };
+
+    const getEmotionColor = (emotion: string) => {
+      const colors: Record<string, string> = {
+        angry: "bg-red-500",
+        disgust: "bg-green-500",
+        fear: "bg-purple-500", 
+        happy: "bg-yellow-500",
+        neutral: "bg-gray-500",
+        sad: "bg-blue-500",
+        surprise: "bg-orange-500"
+      }
+      return colors[emotion] || "bg-gray-500";
+    };
+
+    return (
+      <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
+        <h4 className="font-semibold text-gray-800 mb-3 text-center">📊 Probabilidades por clase:</h4>
+        <div className="space-y-3">
+          {sortedEmotions.map(([emotion, probability]) => (
+            <div key={emotion} className="flex items-center justify-between">
+              <span className="text-sm font-medium text-gray-700 capitalize w-20">
+                {getEmotionLabel(emotion)}:
+              </span>
+              <div className="flex-1 mx-3 bg-gray-200 rounded-full h-3 overflow-hidden">
+                <div 
+                  className={`h-3 rounded-full transition-all duration-500 ${getEmotionColor(emotion)}`}
+                  style={{ width: `${probability * 100}%` }}
+                ></div>
+              </div>
+              <span className="text-sm text-gray-800 font-mono min-w-[65px] text-right">
+                {(probability).toFixed(4)}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 text-xs text-gray-500 text-center">
+          ↑ Ordenado por probabilidad (mayor a menor)
+        </div>
+      </div>
+    );
+  }
 
   const startCamera = async () => {
     try {
@@ -117,6 +197,11 @@ export default function FaceEmotionDetector({ onClose, onEmotionDetected }: Face
       const data: GoogleVisionResponse = await response.json()
       setEmotionData(data)
 
+      // Mostrar notificación si la imagen se guardó
+      if (data.meta?.saved_image) {
+        console.log("📸 Imagen guardada en:", data.meta.saved_image)
+      }
+
       if (data.faces.length > 0 && onEmotionDetected) {
         onEmotionDetected(data.faces[0].best_emotion.label)
       }
@@ -137,7 +222,7 @@ export default function FaceEmotionDetector({ onClose, onEmotionDetected }: Face
   const getEmotionEmoji = (emotion: string) => {
     const emojiMap: Record<string, string> = {
       joy: "😊",
-      sorrow: "😢",
+      sorrow: "😢", 
       anger: "😠",
       surprise: "😲",
       neutral: "😐",
@@ -146,6 +231,10 @@ export default function FaceEmotionDetector({ onClose, onEmotionDetected }: Face
       fear: "😨",
       disgust: "🤢",
       contempt: "😒",
+      // Mapeos para las 7 emociones del modelo FER2013
+      angry: "😠",
+      happy: "😊",
+      sad: "😢"
     }
     return emojiMap[emotion.toLowerCase()] || "😐"
   }
@@ -153,16 +242,22 @@ export default function FaceEmotionDetector({ onClose, onEmotionDetected }: Face
   const translateEmotion = (emotion: string) => {
     const translations: Record<string, string> = {
       joy: "Alegría",
-      sorrow: "Tristeza",
+      sorrow: "Tristeza", 
       anger: "Enojo",
       surprise: "Sorpresa",
       neutral: "Neutral",
+      // Traducciones para las 7 emociones FER2013
+      angry: "Enojo",
+      disgust: "Asco",
+      fear: "Miedo", 
+      happy: "Felicidad",
+      sad: "Tristeza"
     }
     return translations[emotion.toLowerCase()] || emotion
   }
 
   return (
-    <Card className="w-full max-w-2xl mx-auto">
+    <Card className="w-full max-w-2xl mx-auto max-h-[90vh] flex flex-col">
       <CardHeader>
         <div className="flex items-center justify-between">
           <div>
@@ -177,7 +272,7 @@ export default function FaceEmotionDetector({ onClose, onEmotionDetected }: Face
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 max-h-[70vh] overflow-y-auto">
         <div className="relative bg-secondary rounded-lg overflow-hidden aspect-video">
           <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
           <canvas ref={canvasRef} className="hidden" />
@@ -199,10 +294,15 @@ export default function FaceEmotionDetector({ onClose, onEmotionDetected }: Face
         )}
 
         {emotionData && emotionData.faces.length > 0 && (
-          <div className="p-4 bg-primary/10 border border-primary rounded-lg space-y-2">
+          <div className="p-4 bg-primary/10 border border-primary rounded-lg space-y-2 max-h-96 overflow-y-auto">
             <h3 className="font-semibold text-foreground">
               {emotionData.faces.length} {emotionData.faces.length === 1 ? "rostro detectado" : "rostros detectados"}
             </h3>
+            {emotionData.meta?.saved_image && (
+              <div className="text-xs text-muted-foreground bg-green-50 p-2 rounded border border-green-200">
+                📸 Imagen guardada: {emotionData.meta.saved_image.split('/').pop()}
+              </div>
+            )}
             {emotionData.faces.map((face, index) => (
               <div key={index} className="space-y-2">
                 <div className="flex items-center gap-3 p-3 bg-card rounded-md">
@@ -214,6 +314,10 @@ export default function FaceEmotionDetector({ onClose, onEmotionDetected }: Face
                     </p>
                   </div>
                 </div>
+                
+                {/* Mostrar probabilidades detalladas si están disponibles */}
+                <DetailedProbabilities probabilities={face.detailed_probabilities} />
+                
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="p-2 bg-card rounded">
                     <span className="text-muted-foreground">Alegría:</span>{" "}
