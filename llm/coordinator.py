@@ -1,4 +1,11 @@
-from langchain_community.llms import Ollama
+try:
+    from langchain_ollama import OllamaLLM
+    llm = OllamaLLM(model="llama3")
+except ImportError:
+    # Fallback a la versión antigua si no está instalado langchain-ollama
+    from langchain_community.llms import Ollama
+    llm = Ollama(model="llama3")
+
 import requests
 import json
 from .extract_params import (
@@ -10,8 +17,6 @@ from .extract_params import (
     extract_avocado_parameters
 )
 from .available_models import MODELS_CONFIG
-
-llm = Ollama(model="llama3")
 
 
 def get_available_models():

@@ -15,6 +15,7 @@ kagglehub
 ipykernel
 ipython
 langchain_community
+langchain-ollama
 google-cloud-vision
 azure-storage-blob
 google-cloud-speech

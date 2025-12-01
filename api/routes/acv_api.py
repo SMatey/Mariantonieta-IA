@@ -59,7 +59,8 @@ def load_acv_model():
         
     except Exception as e:
         log_model_loading(logger, "ACV Decision Tree", model_path, False, str(e))
-        raise HTTPException(status_code=500, detail=f"Error cargando modelo de ACV: {str(e)}")
+        logger.warning(f"No se pudo cargar el modelo ACV. El módulo estará deshabilitado. Error: {str(e)}")
+        return None  # Retornar None en lugar de lanzar excepción
 
 def create_features_from_acv_data(request: ACVPredictionRequest):
     """
@@ -145,6 +146,11 @@ def predict_acv_risk(request: ACVPredictionRequest):
     try:
         # Cargar modelo
         model_data = load_acv_model()
+        if model_data is None:
+            raise HTTPException(
+                status_code=503, 
+                detail="El modelo ACV no está disponible debido a problemas de compatibilidad de versiones"
+            )
         modelo = model_data['model']
         expected_features = model_data['expected_features']
         
@@ -233,5 +239,8 @@ def health():
 
 # Cargar modelo al inicio de la aplicación
 logger.info("Iniciando ACV API - cargando modelo...")
-load_acv_model()
-logger.info("ACV API inicializada exitosamente")
+_model_result = load_acv_model()
+if _model_result is None:
+    logger.warning("ACV API inicializada sin modelo (deshabilitado por errores de compatibilidad)")
+else:
+    logger.info("ACV API inicializada exitosamente")

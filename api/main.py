@@ -73,8 +73,9 @@ except Exception as e:
 try:
     from .stt import router as stt_router
     STT_AVAILABLE = True
+    logger.info("STT API importada exitosamente")
 except ImportError as e:
-    print(f"⚠️  STT Router no disponible: {e}")
+    logger.warning(f"STT API (speech-to-text) no disponible: {e}")
     STT_AVAILABLE = False
 
 app = FastAPI(
@@ -130,6 +131,8 @@ def root():
         available_models.append("avocado")
     if FACE_AVAILABLE:
         available_models.append("face")
+    if STT_AVAILABLE:
+        available_models.append("stt")
     
     return HealthResponse(
         status="active",
@@ -280,6 +283,20 @@ def health_check():
                 "status": "unhealthy",
                 "error": str(e)
             }
+
+    if STT_AVAILABLE:
+        try:
+            services_status["stt"] = {
+                "status": "healthy",
+                "description": "Speech-to-text ASR model (CTC)"
+            }
+            logger.info("STT API: healthy")
+        except Exception as e:
+            services_status["stt"] = {
+                "status": "unhealthy",
+                "error": str(e)
+            }
+            logger.error(f"STT API: unhealthy - {str(e)}")
     
     overall_status = "healthy" if all(
         service["status"] == "healthy" 
@@ -369,6 +386,15 @@ def list_models():
             "status": "active"
         })
     
+    if STT_AVAILABLE:
+        models.append({
+            "name": "stt",
+            "description": "Transcripción de audio a texto (ASR CTC)",
+            "endpoint": "/stt/",
+            "type": "DeepSpeech2-like CTC model",
+            "status": "active"
+        })
+
     return {"available_models": models}
 
 if __name__ == "__main__":
@@ -388,6 +414,8 @@ if __name__ == "__main__":
     logger.info("Documentación disponible en: http://localhost:8000/docs")
     if FACE_AVAILABLE:
         logger.info("Face Recognition (Google Vision)")
+    if STT_AVAILABLE:
+        logger.info("Speech-to-text ASR (CTC)")
 
     logger.info("Documentación disponible en: http://localhost:8000/docs")
 
