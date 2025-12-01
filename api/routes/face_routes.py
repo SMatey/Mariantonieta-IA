@@ -2,7 +2,8 @@
 from fastapi import APIRouter, File, UploadFile, HTTPException
 from io import BytesIO
 
-from face_recognition.google_vision_service import detect_faces_with_google
+# Cambiar de Google Vision a tu modelo Keras personalizado
+from face_recognition.keras_emotion_service import detect_faces_with_keras
 
 router = APIRouter(prefix="/face", tags=["Face Recognition"]) 
 @router.post("/analyze")
@@ -14,7 +15,8 @@ async def analyze_face(file: UploadFile = File(...)):
         
         image_stream = BytesIO(await file.read())
 
-        results = detect_faces_with_google(image_stream)
+        # Usar tu modelo Keras entrenado en lugar de Google Vision
+        results = detect_faces_with_keras(image_stream)
 
         if len(results) and isinstance(results[0], dict) and "error" in results[0]:
             raise HTTPException(status_code=502, detail=results[0]["error"])
@@ -22,8 +24,9 @@ async def analyze_face(file: UploadFile = File(...)):
         return {
             "faces": results,
             "meta": {
-                "source": "google_vision",
-                "notes": "Detección de rostro y emoción con Google Vision."
+                "source": "keras_custom_model",
+                "notes": "Detección de rostro y emoción con modelo personalizado EfficientNetB3.",
+                "emotions": ["interested", "neutral", "disappointed"]
             }
         }
     except HTTPException:

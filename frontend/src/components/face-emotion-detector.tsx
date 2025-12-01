@@ -137,7 +137,7 @@ export default function FaceEmotionDetector({ onClose, onEmotionDetected }: Face
   const getEmotionEmoji = (emotion: string) => {
     const emojiMap: Record<string, string> = {
       joy: "😊",
-      sorrow: "😢",
+      sorrow: "😢", 
       anger: "😠",
       surprise: "😲",
       neutral: "😐",
@@ -146,6 +146,9 @@ export default function FaceEmotionDetector({ onClose, onEmotionDetected }: Face
       fear: "😨",
       disgust: "🤢",
       contempt: "😒",
+      // Mapeos adicionales para tu modelo
+      interested: "😊", 
+      disappointed: "😞"
     }
     return emojiMap[emotion.toLowerCase()] || "😐"
   }
@@ -153,10 +156,13 @@ export default function FaceEmotionDetector({ onClose, onEmotionDetected }: Face
   const translateEmotion = (emotion: string) => {
     const translations: Record<string, string> = {
       joy: "Alegría",
-      sorrow: "Tristeza",
+      sorrow: "Tristeza", 
       anger: "Enojo",
       surprise: "Sorpresa",
       neutral: "Neutral",
+      // Traducciones para tu modelo
+      interested: "Interesado",
+      disappointed: "Decepcionado"
     }
     return translations[emotion.toLowerCase()] || emotion
   }
