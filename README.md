@@ -29,6 +29,22 @@ Un sistema distribuido de microservicios que integra modelos de Machine Learning
 - **Sistemas de Recomendación**: KNN con métricas de similitud personalizadas
 - **Árboles de Decisión**: Interpretabilidad para dominio médico
 
+### Modelos de Deep Learning (Nuevos)
+Se han añadido varios modelos basados en Deep Learning para ampliar las capacidades del sistema, especialmente en reconocimiento facial, detección de emociones y transcripción de voz.
+
+| Modelo / Archivo                         | Framework / Formato | Dominio de Aplicación                        | Estado    |
+|:----------------------------------------:|:-------------------:|:--------------------------------------------:|:---------:|
+| `dl_models/emotion_model.keras`          | Keras / TensorFlow  | Detección de emoción facial (imagen/video)   | ✅ Activo |
+| `dl_models/asr/mariantonieta_asr_ctc.h5` | Keras (CTC)         | Reconocimiento automático de voz (ASR)       | ✅ Activo |
+| Modelo de vehículos (YOLOv8/Ultralytics) | YOLO / PyTorch     | Detección y clasificación de vehículos       | ✅ Activo |
+
+Estas incorporaciones permiten:
+- Clasificación de emociones faciales en tiempo real mediante un modelo Keras.
+- Transcripción de audio a texto con un modelo CTC (ASR) para integrarlo con el coordinador LLM.
+- Detección y clasificación automática de vehículos en imágenes usando YOLOv8/Ultralytics.
+
+Nota: Algunos modelos (ONNX) requieren `onnxruntime` para ejecución eficiente. Ver sección de instalación para más detalles.
+
 ## Stack Tecnológico
 
 ### Backend & APIs
@@ -43,6 +59,10 @@ Un sistema distribuido de microservicios que integra modelos de Machine Learning
 - **Scikit-learn**: Biblioteca estándar para algoritmos ML clásicos
 - **Joblib**: Persistencia optimizada de modelos ML
 - **Pandas & NumPy**: Manipulación y procesamiento de datos
+
+- **TensorFlow & Keras**: Entrenamiento e inferencia de modelos deep learning (p.ej. clasificación de emociones, ASR CTC)
+- **Ultralytics (YOLO)**: Detección de objetos en imágenes y video (inferencia rápida)
+- **Tools para ASR**: Librerías y utilidades para evaluación de ASR (e.g., `jiwer` para WER)
 
 ### LLM & Procesamiento de Lenguaje
 - **Ollama**: Runtime local para modelos de lenguaje
@@ -321,7 +341,7 @@ Sede San Carlos - Escuela de Ingeniería en Computación
 - **Stack principal**: Python 3.11, FastAPI, React 18, TypeScript
 - **ML Stack**: Prophet, CatBoost, Scikit-learn
 
-**Última actualización**: Octubre 2025  
+**Última actualización**: 1 de diciembre de 2025  
 
 
 
