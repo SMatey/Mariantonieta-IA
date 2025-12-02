@@ -5,10 +5,11 @@ import { useState, useRef } from "react"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 import { Card } from "./ui/card"
-import { Mic, ScanFace, Send, MicOff, Upload } from "lucide-react"
+import { Mic, ScanFace, Send, MicOff, Upload, Car } from "lucide-react"
 import AssistantCharacter from "./assistant-character"
 import MessageList from "./message-list"
 import FaceEmotionDetector from "./face-emotion-detector"
+import VehicleDetection from "./vehicle-detection"
 
 type Message = {
   id: string
@@ -26,6 +27,7 @@ export default function MariantoniettaAssistant() {
   const [isRecording, setIsRecording] = useState(false)
   const [currentResponse, setCurrentResponse] = useState("")
   const [showFaceDetector, setShowFaceDetector] = useState(false)
+  const [showVehicleDetector, setShowVehicleDetector] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Refs para poder detener/limpiar grabación
@@ -252,9 +254,14 @@ export default function MariantoniettaAssistant() {
     }
   }
 
-  // ---- Cámara / reconocimiento facial (placeholder) ----
+  // ---- Cámara / reconocimiento facial ----
   const handleCamera = () => {
     setShowFaceDetector(true)
+  }
+
+  // ---- Detección de vehículos ----
+  const handleVehicleDetection = () => {
+    setShowVehicleDetector(true)
   }
 
   const handleEmotionDetected = (emotion: string) => {
@@ -389,6 +396,12 @@ export default function MariantoniettaAssistant() {
             </div>
           )}
 
+          {showVehicleDetector && (
+            <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <VehicleDetection onClose={() => setShowVehicleDetector(false)} />
+            </div>
+          )}
+
           <Card className="flex-1 p-4 overflow-hidden flex flex-col bg-card/50 backdrop-blur-sm">
             <MessageList messages={messages} currentResponse={currentResponse} assistantState={assistantState} />
           </Card>
@@ -411,6 +424,17 @@ export default function MariantoniettaAssistant() {
                 title="Facial Recognition"
               >
                 <ScanFace className="h-5 w-5" />
+              </Button>
+
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={handleVehicleDetection}
+                disabled={assistantState !== "idle"}
+                className="shrink-0 h-12 w-12 rounded-xl border-primary/20 hover:border-primary hover:bg-primary/10 bg-transparent"
+                title="Vehicle Detection"
+              >
+                <Car className="h-5 w-5" />
               </Button>
 
               <Button
