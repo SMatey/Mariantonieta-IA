@@ -5,7 +5,7 @@ import { useState, useRef } from "react"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 import { Card } from "./ui/card"
-import { Mic, ScanFace, Send, MicOff } from "lucide-react"
+import { Mic, ScanFace, Send, MicOff, Upload } from "lucide-react"
 import AssistantCharacter from "./assistant-character"
 import MessageList from "./message-list"
 import FaceEmotionDetector from "./face-emotion-detector"
@@ -32,6 +32,7 @@ export default function MariantoniettaAssistant() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
   const stopTimerRef = useRef<number | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // ---- Grabación de voz y envío a /stt ----
   const handleVoiceRecording = async () => {
@@ -68,7 +69,7 @@ export default function MariantoniettaAssistant() {
             const formData = new FormData()
             formData.append("file", wavBlob, "audio.wav")
 
-            const resp = await fetch("http://localhost:8000/stt", {
+            const resp = await fetch("http://localhost:8000/stt/", {
               method: "POST",
               body: formData,
             })
@@ -207,6 +208,47 @@ export default function MariantoniettaAssistant() {
   function writeString(view: DataView, offset: number, str: string) {
     for (let i = 0; i < str.length; i++) {
       view.setUint8(offset + i, str.charCodeAt(i))
+    }
+  }
+
+  // ---- Cargar archivo de audio ----
+  const handleUploadAudio = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    try {
+      setAssistantState("thinking")
+
+      const formData = new FormData()
+      formData.append("file", file)
+
+      const resp = await fetch("http://localhost:8000/stt/", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!resp.ok) {
+        const ct = resp.headers.get("content-type") || ""
+        const errText = ct.includes("application/json")
+          ? JSON.stringify(await resp.json())
+          : await resp.text()
+        console.error("STT error:", errText)
+        throw new Error(errText || "Error al transcribir el audio")
+      }
+
+      const data = await resp.json()
+      setInput(data.transcript || "")
+    } catch (e) {
+      console.error("Error al procesar archivo:", e)
+    } finally {
+      setAssistantState("idle")
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
     }
   }
 
@@ -352,6 +394,13 @@ export default function MariantoniettaAssistant() {
           </Card>
 
           <Card className="p-4 bg-card/50 backdrop-blur-sm">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="audio/*"
+              onChange={handleFileChange}
+              className="hidden"
+            />
             <div className="flex gap-2 items-end">
               <Button
                 size="icon"
@@ -376,6 +425,17 @@ export default function MariantoniettaAssistant() {
                 }`}
               >
                 {isRecording ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+              </Button>
+
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={handleUploadAudio}
+                disabled={assistantState === "thinking" || assistantState === "speaking"}
+                className="shrink-0 h-12 w-12 rounded-xl border-primary/20 hover:border-primary hover:bg-primary/10 bg-transparent"
+                title="Upload Audio"
+              >
+                <Upload className="h-5 w-5" />
               </Button>
 
               <div className="flex-1 flex gap-2">
