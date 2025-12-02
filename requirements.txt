@@ -29,3 +29,5 @@ catboost
 azure-cognitiveservices-vision-face
 msrest
 jiwer
+ultralytics
+opencv-python

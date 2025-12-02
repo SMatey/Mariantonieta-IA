@@ -78,6 +78,14 @@ except ImportError as e:
     logger.warning(f"STT API (speech-to-text) no disponible: {e}")
     STT_AVAILABLE = False
 
+try:
+    from api.routes import vehicles_api
+    VEHICLES_AVAILABLE = True
+    logger.info("Vehicles API importada exitosamente")
+except Exception as e:
+    logger.warning(f"Vehicles API no disponible: {e}")
+    VEHICLES_AVAILABLE = False
+
 app = FastAPI(
     title="AI Models API Hub",
     description="API centralizada para múltiples modelos de Machine Learning",
@@ -115,6 +123,9 @@ if FACE_AVAILABLE:
 if STT_AVAILABLE:
     app.include_router(stt_router)
 
+if VEHICLES_AVAILABLE:
+    app.include_router(vehicles_api.router)
+
 @app.get("/", response_model=HealthResponse)
 def root():
     """Endpoint principal con información de la API"""
@@ -133,6 +144,8 @@ def root():
         available_models.append("face")
     if STT_AVAILABLE:
         available_models.append("stt")
+    if VEHICLES_AVAILABLE:
+        available_models.append("vehicles")
     
     return HealthResponse(
         status="active",
@@ -298,6 +311,23 @@ def health_check():
             }
             logger.error(f"STT API: unhealthy - {str(e)}")
     
+    if VEHICLES_AVAILABLE:
+        try:
+            from vehicles.vehicles_service import get_vehicle_service
+            vehicle_service = get_vehicle_service()
+            services_status["vehicles"] = {
+                "status": "healthy",
+                "model_type": "YOLOv8",
+                "description": "Vehicle Detection Model"
+            }
+            logger.info("Vehicles API: healthy")
+        except Exception as e:
+            services_status["vehicles"] = {
+                "status": "unhealthy",
+                "error": str(e)
+            }
+            logger.error(f"Vehicles API: unhealthy - {str(e)}")
+    
     overall_status = "healthy" if all(
         service["status"] == "healthy" 
         for service in services_status.values()
@@ -313,7 +343,8 @@ def health_check():
         "flights_available": FLIGHTS_AVAILABLE,
         "acv_available": ACV_AVAILABLE,
         "avocado_available": AVOCADO_AVAILABLE,
-        "face_available": FACE_AVAILABLE
+        "face_available": FACE_AVAILABLE,
+        "vehicles_available": VEHICLES_AVAILABLE
     }
 
 @app.get("/models")
@@ -394,6 +425,18 @@ def list_models():
             "type": "DeepSpeech2-like CTC model",
             "status": "active"
         })
+    
+    if VEHICLES_AVAILABLE:
+        models.append({
+            "name": "vehicles",
+            "description": "Detección de vehículos en imágenes y videos usando YOLOv8",
+            "endpoints": [
+                "/vehicles/analyze-image",
+                "/vehicles/analyze-video"
+            ],
+            "type": "YOLOv8",
+            "status": "active"
+        })
 
     return {"available_models": models}
 
@@ -416,6 +459,8 @@ if __name__ == "__main__":
         logger.info("Face Recognition (Google Vision)")
     if STT_AVAILABLE:
         logger.info("Speech-to-text ASR (CTC)")
+    if VEHICLES_AVAILABLE:
+        logger.info("Vehicle Detection (YOLOv8)")
 
     logger.info("Documentación disponible en: http://localhost:8000/docs")
 
