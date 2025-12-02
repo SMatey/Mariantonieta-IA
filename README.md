@@ -43,8 +43,6 @@ Estas incorporaciones permiten:
 - Transcripción de audio a texto con un modelo CTC (ASR) para integrarlo con el coordinador LLM.
 - Detección y clasificación automática de vehículos en imágenes usando YOLOv8/Ultralytics.
 
-Nota: Algunos modelos (ONNX) requieren `onnxruntime` para ejecución eficiente. Ver sección de instalación para más detalles.
-
 ## Stack Tecnológico
 
 ### Backend & APIs
